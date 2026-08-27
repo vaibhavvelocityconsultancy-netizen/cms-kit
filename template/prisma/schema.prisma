@@ -1,0 +1,1584 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-1.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────mod────────────────────────────────────────────────
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+  LIFETIME
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELED
+  PENDING
+}
+
+enum rolepermission_role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  AUTHOR
+  VIEWER
+  SUBSCRIBER
+}
+
+enum user_role {
+  SUPER_ADMIN
+  ADMIN
+  EDITOR
+  AUTHOR
+  VIEWER
+  SUBSCRIBER
+}
+
+enum status {
+  DRAFT
+  PUBLISHED
+
+  @@map("post_status")
+}
+
+enum comment_status {
+  PENDING
+  APPROVED
+  SPAM
+  TRASH
+}
+
+enum sitemapChangeFrequency {
+  ALWAYS
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  NEVER
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TENANT
+// ─────────────────────────────────────────────────────────────────────────────
+
+model tenant {
+  id   Int    @id @default(autoincrement())
+  name String
+  slug String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users                user[]
+  pages                page[]
+  forms                form[]
+  menus                menu[]
+  posts                post[]
+  collections          collection[]
+  sitesettings         sitesettings?
+  footersettings       footersettings[]
+  categories           category[]
+  tags                 tag[]
+  media                media[]
+  redirects            Redirect[]
+  notFoundLogs         NotFoundLog[]
+  redirectImports      RedirectImport[]
+  NavbarConfig         NavbarConfig?
+  breadcrumbSettings   BreadcrumbSettings?
+  footerConfig         FooterConfig?
+  trackingSettings     TrackingSettings?
+  analyticsSettings    analyticsSettings?
+  aicrawlSettings      AICrawlSettings?
+  aicrawlContents      AICrawlContent[]
+  internalLinkRules    InternalLinkRule[]
+  uploadedFiles        UploadedFile[]
+  plans                Plan[]
+  planSettings         PlanSettings?
+  fileCategories       FileCategory[]
+  pricingPageSettings  pricingPageSettings?
+  pageElementOverrides PageElementOverride[]
+  brands               Brand[]
+  productCategories    ProductCategory[]
+  attributes           Attribute[]
+  products             Product[]
+  orders               Order[]
+  carts                Cart[]
+  coupons              Coupon[]
+  shippingZones        ShippingZone[]
+  taxClasses           TaxClass[]
+  ecommerceSettings    EcommerceSettings?
+}
+
+model EmailTemplate {
+  id            String   @id @default(cuid())
+  triggerEvent  String
+  recipientType String
+  name          String
+  subject       String
+  bodyHtml      String   @db.Text
+  isActive      Boolean  @default(true)
+  variables     Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  logs EmailLog[]
+
+  @@unique([triggerEvent, recipientType])
+}
+
+model EmailSettings {
+  id             String    @id @default("singleton")
+  senderName     String    @default("")
+  fromEmail      String    @default("")
+  replyToEmail   String?
+  adminEmail     String    @default("")
+  lastTestStatus String? // "SUCCESS" | "FAILED"
+  lastTestAt     DateTime?
+  lastTestError  String?   @db.Text
+  updatedAt      DateTime  @updatedAt
+}
+
+model EmailLog {
+  id            String    @id @default(cuid())
+  templateId    String?
+  triggerEvent  String
+  recipientType String
+  emailTo       String
+  subject       String
+  status        String
+  provider      String
+  error         String?   @db.Text
+  metadata      Json?
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+
+  template EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([triggerEvent])
+  @@index([templateId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USER  (added: payments, subscriptions, enrollments relations)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model analyticsSettings {
+  id Int @id @default(autoincrement())
+
+  tenantId Int    @unique
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Google Tag Manager
+  gtmId         String?
+  gtmHeadScript String? @db.Text
+  gtmBodyScript String? @db.Text
+
+  // Google Analytics 4
+  gaMeasurementId String?
+  gaHeadScript    String? @db.Text
+
+  // Facebook Pixel
+  facebookPixelId    String?
+  facebookHeadScript String? @db.Text
+
+  // Google Ads
+  googleAdsId         String?
+  googleAdsHeadScript String? @db.Text
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  autoGenerateScripts Boolean  @default(true)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — AI & LLM SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AICrawlSettings {
+  id Int @id @default(autoincrement())
+
+  tenantId Int    @unique
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Markdown Generation
+  enableMarkdownGeneration Boolean @default(true)
+  includePages             Boolean @default(true)
+  includePosts             Boolean @default(true)
+  excludeDrafts            Boolean @default(true)
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  autoGenerateScripts Boolean  @default(true)
+}
+
+model user {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  password  String
+  name      String?
+  role      user_role @default(SUBSCRIBER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  tenantId  Int
+  tenant    tenant    @relation(fields: [tenantId], references: [id])
+
+  // CMS relations
+  collection     collection[]
+  comment        comment[]
+  post           post[]
+  userpermission userpermission[]
+
+  // Billing relations
+  payments          Payment[]
+  subscriptions     Subscription[]
+  uploadedFiles     UploadedFile[]
+  fileShares        FileShareLink[]
+  planSubscriptions PlanSubscription[]
+  planEnrollments   PlanEnrollment[]
+  customerAddresses CustomerAddress[]
+  orders            Order[]
+  carts             Cart[]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COURSE FEATURES REMOVED
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AICrawlContent {
+  id Int @id @default(autoincrement())
+
+  tenantId Int
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Type: "page" or "post"
+  contentType String
+  contentId   String // page.id or post.id (stored as string)
+  slug        String
+  title       String
+
+  // Generated markdown
+  markdown String @db.Text
+
+  // Stats
+  wordCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, contentType, contentId])
+  @@index([tenantId])
+  @@index([contentType])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAYMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Payment {
+  id                   String        @id @default(cuid())
+  userId               Int
+  courseId             Int?
+  planId               Int?
+  billingCycle         BillingCycle  @default(LIFETIME)
+  paypalOrderId        String?       @unique
+  paypalCaptureId      String?       @unique
+  paypalSubscriptionId String?
+  amount               Int
+  currency             String        @default("INR")
+  status               PaymentStatus @default(PENDING)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  user user  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan? @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([courseId])
+  @@index([planId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUBSCRIPTION  (only used for MONTHLY / YEARLY billing cycles)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Subscription {
+  id               Int                @id @default(autoincrement())
+  userId           Int
+  courseId         Int
+  billingCycle     BillingCycle       @default(MONTHLY)
+  status           SubscriptionStatus @default(TRIAL)
+  startsAt         DateTime
+  currentPeriodEnd DateTime
+  canceledAt       DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  user user @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId]) // one active subscription per user per course
+  @@index([userId])
+  @@index([courseId])
+  @@index([status])
+  @@index([currentPeriodEnd]) // for renewal/expiry cron jobs
+}
+
+model Plan {
+  id           Int      @id @default(autoincrement())
+  tenantId     Int
+  title        String
+  slug         String
+  tagline      String?
+  description  String?
+  monthlyPrice Decimal? @db.Decimal(10, 2)
+  yearlyPrice  Decimal? @db.Decimal(10, 2)
+
+  allowMonthly        Boolean  @default(true)
+  allowYearly         Boolean  @default(true)
+  billingPeriodDays   Int?
+  paypalMonthlyPlanId String?
+  paypalYearlyPlanId  String?
+  trialDays           Int? // null = use global default; 0 = no trial for this plan
+  isFeatured          Boolean  @default(false)
+  isPublished         Boolean  @default(true)
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant        tenant             @relation(fields: [tenantId], references: [id])
+  features      PlanFeature[]
+  payments      Payment[]
+  subscriptions PlanSubscription[]
+  enrollments   PlanEnrollment[]
+
+  @@unique([slug, tenantId])
+  @@index([tenantId])
+}
+
+model PlanSettings {
+  id               Int      @id @default(autoincrement())
+  tenantId         Int      @unique
+  defaultTrialDays Int      @default(7)
+  updatedAt        DateTime @updatedAt
+
+  tenant tenant @relation(fields: [tenantId], references: [id])
+}
+
+model PlanFeature {
+  id        Int    @id @default(autoincrement())
+  title     String
+  sortOrder Int    @default(0)
+  plan      Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planId    Int
+
+  @@index([planId])
+}
+
+model PlanSubscription {
+  id                   Int                @id @default(autoincrement())
+  userId               Int
+  planId               Int
+  billingCycle         BillingCycle       @default(MONTHLY)
+  status               SubscriptionStatus @default(TRIAL)
+  startsAt             DateTime
+  currentPeriodEnd     DateTime
+  trialEndsAt          DateTime?
+  paypalSubscriptionId String?            @unique
+  canceledAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user user @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, planId])
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+  @@index([currentPeriodEnd])
+}
+
+model PlanEnrollment {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  planId      Int
+  purchasedAt DateTime @default(now())
+
+  user user @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, planId])
+  @@index([userId])
+  @@index([planId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — PERMISSION / ROLE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model permission {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique
+  description    String?          @db.Text
+  isVisible      Boolean          @default(true)
+  rolepermission rolepermission[]
+  userpermission userpermission[]
+
+  @@index([name])
+}
+
+model rolepermission {
+  id           Int                 @id @default(autoincrement())
+  role         rolepermission_role
+  permissionId Int
+  isVisible    Boolean             @default(true)
+  permission   permission          @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([role, permissionId])
+  @@index([permissionId])
+  @@index([role])
+}
+
+model userpermission {
+  id           Int        @id @default(autoincrement())
+  userId       Int
+  permissionId Int
+  allowed      Boolean    @default(true)
+  permission   permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  user         user       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@index([permissionId])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — PAGE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model page {
+  id                Int     @id @default(autoincrement())
+  title             String
+  slug              String
+  html              String  @db.Text
+  css               String? @db.Text
+  js                String? @db.Text
+  jsxCode           String? @db.Text
+  pageType          String  @default("html")
+  status            status  @default(PUBLISHED)
+  seoData           Json?
+  sitemapEnabled    Boolean @default(true)
+  componentSettings Json?
+  searchText        String? @db.Text
+
+  sitemapPriority      Decimal                @default(0.8) @db.Decimal(2, 1)
+  sitemapChangeFreq    sitemapChangeFrequency @default(WEEKLY)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  tenant               tenant                 @relation(fields: [tenantId], references: [id])
+  tenantId             Int
+  pageElementOverrides PageElementOverride[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model PageElementOverride {
+  id        String   @id @default(cuid())
+  pageId    Int
+  editorId  String
+  styles    Json?
+  classes   String?
+  text      String?
+  link      String?
+  tenantId  Int
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  page   page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  tenant tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, editorId])
+  @@index([tenantId])
+  @@index([pageId])
+}
+
+model pricingPageSettings {
+  id        Int      @id @default(autoincrement())
+  formId    Int?
+  tenantId  Int      @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  form form? @relation(fields: [formId], references: [id], onDelete: SetNull)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — POST / CATEGORY / TAG / COMMENT
+// ─────────────────────────────────────────────────────────────────────────────
+
+model post {
+  id            String    @id
+  title         String
+  slug          String
+  excerpt       String?   @db.Text
+  content       String    @db.Text
+  featuredImage String?
+  status        status    @default(PUBLISHED)
+  authorId      Int?
+  seoData       Json?
+  publishedAt   DateTime?
+
+  searchText String? @db.Text
+
+  sitemapEnabled Boolean @default(true)
+
+  sitemapPriority   Decimal                @default(0.8) @db.Decimal(2, 1)
+  sitemapChangeFreq sitemapChangeFrequency @default(WEEKLY)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  format            String                 @default("standard")
+  tenantId          Int
+
+  comment  comment[]
+  user     user?      @relation(fields: [authorId], references: [id])
+  category category[] @relation("categorytopost")
+  tag      tag[]      @relation("posttotag")
+  tenant   tenant     @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, slug])
+  @@index([authorId])
+  @@index([tenantId])
+}
+
+model category {
+  id          String  @id
+  name        String
+  slug        String
+  description String? @db.Text
+  parentId    String?
+  tenantId    Int
+
+  tenant         tenant     @relation(fields: [tenantId], references: [id])
+  category       category?  @relation("categoryTocategory", fields: [parentId], references: [id])
+  other_category category[] @relation("categoryTocategory")
+  post           post[]     @relation("categorytopost")
+  sitemapEnabled Boolean    @default(true)
+
+  sitemapPriority Decimal @default(0.5) @db.Decimal(2, 1)
+
+  sitemapChangeFreq sitemapChangeFrequency @default(WEEKLY)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([parentId])
+}
+
+model tag {
+  id       String @id
+  name     String
+  slug     String
+  tenantId Int
+
+  tenant tenant @relation(fields: [tenantId], references: [id])
+  post   post[] @relation("posttotag")
+
+  sitemapEnabled Boolean @default(false)
+
+  sitemapPriority Decimal @default(0.8) @db.Decimal(2, 1)
+
+  sitemapChangeFreq sitemapChangeFrequency @default(WEEKLY)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model comment {
+  id          String         @id @default(uuid())
+  content     String         @db.Text
+  authorName  String
+  authorEmail String
+  authorUrl   String?
+  ipAddress   String?
+  userAgent   String?
+  status      comment_status @default(PENDING)
+  postId      String
+  userId      Int?
+  parentId    String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  comment       comment?  @relation("commentTocomment", fields: [parentId], references: [id])
+  other_comment comment[] @relation("commentTocomment")
+  post          post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user          user?     @relation(fields: [userId], references: [id])
+
+  @@index([parentId])
+  @@index([postId])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — MEDIA / COLLECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model media {
+  id           Int      @id @default(autoincrement())
+  fileName     String
+  originalName String
+  url          String
+  publicId     String?  @db.VarChar(255)
+  mimeType     String
+  size         Int
+  width        Int?
+  height       Int?
+  altText      String?
+  title        String?
+  caption      String?  @db.Text
+  description  String?  @db.Text
+  createdAt    DateTime @default(now())
+  tenantId     Int
+  collectionId Int?
+
+  tenant     tenant      @relation(fields: [tenantId], references: [id])
+  collection collection? @relation(fields: [collectionId], references: [id])
+
+  @@index([tenantId])
+  @@index([collectionId])
+}
+
+model collection {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?  @db.Text
+  userId      Int
+  tenantId    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   user    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant tenant  @relation(fields: [tenantId], references: [id])
+  media  media[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — MENU / MENUITEM
+// ─────────────────────────────────────────────────────────────────────────────
+
+model menu {
+  id       Int    @id @default(autoincrement())
+  name     String
+  location String @default("none")
+  tenantId Int
+
+  tenant   tenant     @relation(fields: [tenantId], references: [id])
+  menuitem menuitem[]
+}
+
+model menuitem {
+  id       Int     @id @default(autoincrement())
+  label    String
+  type     String
+  slug     String?
+  url      String?
+  order    Int
+  menuId   Int
+  parentId Int?
+
+  menu           menu       @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  menuitem       menuitem?  @relation("menuitemTomenuitem", fields: [parentId], references: [id])
+  other_menuitem menuitem[] @relation("menuitemTomenuitem")
+
+  @@index([menuId])
+  @@index([parentId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — FORM / FORMSUBMISSION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model form {
+  id     Int    @id @default(autoincrement())
+  title  String
+  slug   String
+  fields Json
+
+  submitButtonLabel        String?  @default("Submit")
+  submitButtonClass        String?
+  confirmationType         String   @default("message")
+  confirmationMessage      String?  @db.Text
+  confirmationMessageClass String?
+  redirectUrl              String?
+  emails                   Json?
+  status                   String   @default("active")
+  hideRequiredIndicator    Boolean  @default(false)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  tenantId                 Int
+  layout                   String   @default("default")
+  twoColumnHeading         String?  @db.Text
+  twoColumnParagraph       String?  @db.Text
+
+  tenant              tenant                @relation(fields: [tenantId], references: [id])
+  formsubmission      formsubmission[]
+  pricingPageSettings pricingPageSettings[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model formsubmission {
+  id        Int       @id @default(autoincrement())
+  formId    Int
+  data      Json
+  ipAddress String?
+  createdAt DateTime  @default(now())
+  read      Boolean   @default(false)
+  readAt    DateTime?
+
+  form form @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — SITE APPEARANCE & SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model sitesettings {
+  id                     Int       @id @default(1)
+  siteName               String?
+  siteTagline            String?
+  logo                   String?
+  favicon                String?
+  defaultMetaTitle       String?
+  defaultMetaDescription String?   @db.Text
+  postsPerPage           Int       @default(10)
+  homepageType           String    @default("posts")
+  homepagePageId         Int?
+  postsPageId            Int?
+  globalCss              String?   @db.Text
+  globalJs               String?   @db.Text
+  showAdminToolbar       Boolean   @default(true)
+  tenantId               Int       @unique
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  // Sitemap
+  sitemapEnabled         Boolean   @default(true)
+  sitemapCacheMinutes    Int       @default(10)
+  sitemapLastGeneratedAt DateTime?
+  sitemapCustomUrl       String?
+
+  includePages      Boolean @default(true)
+  includePosts      Boolean @default(true)
+  includeCategories Boolean @default(true)
+  includeTags       Boolean @default(false)
+
+  pingSearchEngines Boolean @default(false)
+
+  cachedSitemapXml       String?
+  cachedSitemapExpiresAt DateTime?
+  highlightAutoLinks     Boolean   @default(false)
+
+  // ── Module toggles (UI-only feature gating for now) ─────────
+  seoEnabled Boolean @default(false)
+
+  tenant             tenant  @relation(fields: [tenantId], references: [id])
+  robotsEnabled      Boolean @default(false)
+  robotsContent      String? @db.Text
+  customCrawlerRules String? @db.Text
+}
+
+model TrackingSettings {
+  id Int @id @default(autoincrement())
+
+  tenantId Int    @unique
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  gtmId String?
+
+  gaMeasurementId String?
+
+  facebookPixelId String?
+
+  googleAdsId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model footersettings {
+  id       Int    @id @default(autoincrement())
+  key      String @unique
+  tenantId Int
+  value    Json
+
+  tenant tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model NavbarConfig {
+  id       String @id @default(cuid())
+  tenantId Int    @unique
+
+  // colors
+  bgColor        String @default("#0B0F1A")
+  bgOpacity      Int    @default(90)
+  linkColor      String @default("#cbd5e1")
+  linkHoverColor String @default("#ffffff")
+  accentColor    String @default("#22d3ee")
+  dropdownBg     String @default("#111827")
+
+  // behavior
+  sticky Boolean @default(true)
+  blur   Boolean @default(true)
+
+  // buttons
+  showLogin    Boolean @default(true)
+  showSignup   Boolean @default(true)
+  showPricing  Boolean @default(true)
+  loginLabel   String  @default("Log In")
+  signupLabel  String  @default("Sign Up")
+  pricingLabel String  @default("Pricing")
+
+  // advanced
+  customCss String? @db.Text
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  tenant tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model FooterConfig {
+  id       String @id @default(cuid())
+  tenantId Int    @unique
+
+  bgColor       String @default("#0B0F1A")
+  borderColor   String @default("#ffffff") // used with low opacity, see opacity field
+  borderOpacity Int    @default(8) // 0-100, maps to /5 or /10 style borders
+
+  headingColor    String @default("#ffffff")
+  textColor       String @default("#cbd5e1") // slate-300
+  mutedTextColor  String @default("#94a3b8") // slate-400
+  bottomTextColor String @default("#64748b") // slate-500
+
+  accentColor      String @default("#22d3ee") // cyan-400
+  accentHoverColor String @default("#67e8f9") // cyan-300
+  ctaTextColor     String @default("#0f172a") // slate-900, text on accent buttons
+
+  eyebrowText String  @default("Let's Start a Conversation")
+  headline    String  @default("Ready to grow your business?")
+  showCta     Boolean @default(true)
+
+  customCss String? @db.Text
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  tenant tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model BreadcrumbSettings {
+  id       String @id @default(cuid())
+  tenantId Int    @unique
+
+  enabled Boolean @default(true)
+
+  homeLabel String  @default("Home")
+  homeUrl   String?
+
+  separator String @default("/")
+
+  showHome    Boolean @default(true)
+  showCurrent Boolean @default(true)
+  showParent  Boolean @default(true)
+
+  pagesEnabled      Boolean @default(true)
+  postsEnabled      Boolean @default(true)
+  categoriesEnabled Boolean @default(true)
+  tagsEnabled       Boolean @default(true)
+
+  hideOnHome   Boolean @default(true)
+  hideOn404    Boolean @default(true)
+  hideOnSearch Boolean @default(false)
+
+  schemaEnabled Boolean @default(true)
+
+  cssClass       String?
+  customCss      String? @db.Text
+  linkColor      String  @default("#4b5563")
+  linkHoverColor String  @default("#111827")
+  currentColor   String  @default("#6b7280")
+  separatorColor String  @default("#9ca3af")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — REDIRECTS & 404 TRACKING
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Redirect {
+  id             String    @id @default(cuid())
+  sourceUrl      String    @unique
+  destinationUrl String
+  statusCode     Int       @default(301)
+  isActive       Boolean   @default(true)
+  description    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String?
+  isAutoDetected Boolean   @default(false)
+  hitCount       Int       @default(0)
+  lastUsedAt     DateTime?
+  tenantId       Int
+  tenant         tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([sourceUrl])
+  @@index([isActive])
+}
+
+model NotFoundLog {
+  id           String   @id @default(cuid())
+  path         String
+  referrer     String?
+  userAgent    String?
+  ipAddress    String?
+  suggestedUrl String?
+  redirectId   String?
+  isResolved   Boolean  @default(false)
+  occurredAt   DateTime @default(now())
+  tenantId     Int
+  tenant       tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([path])
+  @@index([isResolved])
+}
+
+model RedirectImport {
+  id           String   @id @default(cuid())
+  filename     String
+  totalCount   Int
+  successCount Int
+  failureCount Int
+  errors       String?
+  importedBy   String
+  importedAt   DateTime @default(now())
+  tenantId     Int
+  tenant       tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model InternalLinkRule {
+  id String @id @default(cuid())
+
+  tenantId Int
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  keyword String
+
+  // destination
+  destinationType String? // page | post | category | tag | course | custom
+  destinationId   String?
+  destinationUrl  String
+
+  // link output
+  linkTitle    String?
+  openInNewTab Boolean @default(false)
+
+  // behaviour
+  enabled             Boolean @default(true)
+  wholeWordOnly       Boolean @default(true)
+  caseSensitive       Boolean @default(false)
+  firstOccurrenceOnly Boolean @default(false)
+  ignoreHeadings      Boolean @default(true)
+  ignoreExistingLinks Boolean @default(true)
+
+  maxLinksPerPage Int @default(1)
+
+  priority Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([keyword])
+}
+
+// File Sharing System
+model FileCategory {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String
+  description String? @db.Text
+  parentId    String?
+  tenantId    Int
+
+  tenant   tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent   FileCategory?  @relation("FileCategoryHierarchy", fields: [parentId], references: [id])
+  children FileCategory[] @relation("FileCategoryHierarchy")
+
+  files UploadedFile[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([parentId])
+}
+
+model UploadedFile {
+  id          String  @id @default(cuid())
+  title       String
+  shortDesc   String? @db.Text // short description shown on file card
+  description String? @db.Text // long description
+  isShareable Boolean @default(true)
+
+  tags String? @db.Text // ← NEW — comma-separated, e.g. "invoice,2026,urgent"
+
+  fileName     String
+  originalName String
+  url          String
+  mimeType     String
+  size         Int
+
+  uploadedBy Int
+  tenantId   Int
+
+  categoryId String?
+  category   FileCategory? @relation(fields: [categoryId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uploader user   @relation(fields: [uploadedBy], references: [id])
+
+  shareFiles FileShareFile[]
+
+  @@index([tenantId])
+  @@index([uploadedBy])
+  @@index([categoryId])
+}
+
+model FileShareLink {
+  id String @id @default(cuid())
+
+  sharedWith String
+  message    String? @db.Text
+  password   String
+
+  createdBy Int
+  token     String @unique @default(cuid())
+
+  viewedAt        DateTime?
+  zipDownloadedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  creator user @relation(fields: [createdBy], references: [id])
+
+  files FileShareFile[]
+
+  @@index([token])
+  @@index([createdBy])
+}
+
+model FileShareFile {
+  id String @id @default(cuid())
+
+  shareLinkId String
+  fileId      String
+
+  downloadedAt DateTime?
+
+  shareLink FileShareLink @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
+  file      UploadedFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@unique([shareLinkId, fileId])
+  @@index([shareLinkId])
+  @@index([fileId])
+}
+
+// Ecommerce models
+// ─────────────────────────────────────────────────────────────────────────────
+// E-COMMERCE — ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ProductStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum OrderPaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  STRIPE
+  COD
+  PAYPAL
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum AddressType {
+  SHIPPING
+  BILLING
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E-COMMERCE — CATALOG
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Brand {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String
+  logo        String?
+  description String? @db.Text
+
+  tenantId Int
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  products Product[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model ProductCategory {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String
+  description String? @db.Text
+  image       String?
+  parentId    String?
+
+  tenantId Int
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  parent   ProductCategory?  @relation("ProductCategoryToProductCategory", fields: [parentId], references: [id])
+  children ProductCategory[] @relation("ProductCategoryToProductCategory")
+
+  products Product[] @relation("ProductToProductCategory")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([parentId])
+}
+
+model Attribute {
+  id   String @id @default(cuid())
+  name String
+  slug String
+
+  tenantId Int
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  values AttributeValue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model AttributeValue {
+  id        String @id @default(cuid())
+  value     String
+  sortOrder Int    @default(0)
+
+  attributeId String
+  attribute   Attribute @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+
+  variantLinks ProductVariantAttribute[]
+
+  @@index([attributeId])
+}
+
+model Product {
+  id               String        @id @default(cuid())
+  title            String
+  slug             String
+  description      String?       @db.Text
+  shortDescription String?
+  sku              String?
+  price            Decimal       @default(0) @db.Decimal(10, 2)
+  compareAtPrice   Decimal?      @db.Decimal(10, 2)
+  stockQuantity    Int           @default(0)
+  inStock          Boolean       @default(true)
+  status           ProductStatus @default(DRAFT)
+  isFeatured       Boolean       @default(false)
+  isVariable       Boolean       @default(false)
+  seoData          Json?
+
+  tenantId Int
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  brandId String?
+  brand   Brand?  @relation(fields: [brandId], references: [id])
+
+  categories ProductCategory[] @relation("ProductToProductCategory")
+  images     ProductImage[]
+  variants   ProductVariant[]
+  orderItems OrderItem[]
+  cartItems  CartItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([status])
+  @@index([brandId])
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  url       String
+  altText   String?
+  sortOrder Int     @default(0)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model ProductVariant {
+  id             String   @id @default(cuid())
+  sku            String?
+  price          Decimal  @db.Decimal(10, 2)
+  compareAtPrice Decimal? @db.Decimal(10, 2)
+  stockQuantity  Int      @default(0)
+  inStock        Boolean  @default(true)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  attributeValues ProductVariantAttribute[]
+  orderItems      OrderItem[]
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  cartItems CartItem[]
+
+  @@index([productId])
+}
+
+model ProductVariantAttribute {
+  id String @id @default(cuid())
+
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  attributeValueId String
+  attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, attributeValueId])
+  @@index([variantId])
+  @@index([attributeValueId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E-COMMERCE — CUSTOMERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CustomerAddress {
+  id           String      @id @default(cuid())
+  userId       Int
+  type         AddressType @default(SHIPPING)
+  fullName     String
+  phone        String?
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String
+  postalCode   String
+  country      String
+  isDefault    Boolean     @default(false)
+
+  user user @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E-COMMERCE — ORDERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Order {
+  id                    String             @id @default(cuid())
+  orderNumber           String             @unique
+  userId                Int
+  status                OrderStatus        @default(PENDING)
+  paymentStatus         OrderPaymentStatus @default(PENDING)
+  paymentMethod         PaymentMethod      @default(STRIPE)
+  stripeSessionId       String?
+  stripePaymentIntentId String?
+  paypalOrderId         String?            @unique
+  subtotal              Decimal            @db.Decimal(10, 2)
+  shippingCost          Decimal            @default(0) @db.Decimal(10, 2)
+  taxAmount             Decimal            @default(0) @db.Decimal(10, 2)
+  discountAmount        Decimal            @default(0) @db.Decimal(10, 2)
+  total                 Decimal            @db.Decimal(10, 2)
+  currency              String             @default("INR")
+
+  couponCode      String?
+  shippingAddress Json
+  billingAddress  Json
+
+  tenantId Int
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user     user   @relation(fields: [userId], references: [id])
+
+  items OrderItem[]
+  notes OrderNote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([userId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id           String  @id @default(cuid())
+  orderId      String
+  productId    String
+  variantId    String?
+  productTitle String
+  sku          String?
+  price        Decimal @db.Decimal(10, 2)
+  quantity     Int
+  total        Decimal @db.Decimal(10, 2)
+
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderNote {
+  id                String  @id @default(cuid())
+  orderId           String
+  note              String  @db.Text
+  isCustomerVisible Boolean @default(false)
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model Cart {
+  id        String     @id @default(cuid())
+  sessionId String     @unique
+  userId    Int?
+  tenantId  Int
+  user      user?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model CartItem {
+  id        String          @id @default(cuid())
+  cartId    String
+  productId String
+  variantId String?
+  quantity  Int             @default(1)
+  cart      Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@index([productId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E-COMMERCE — DISCOUNTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Coupon {
+  id            String       @id @default(cuid())
+  code          String
+  type          DiscountType @default(PERCENTAGE)
+  value         Decimal      @db.Decimal(10, 2)
+  minOrderValue Decimal?     @db.Decimal(10, 2)
+  maxUses       Int?
+  usedCount     Int          @default(0)
+  isActive      Boolean      @default(true)
+  startsAt      DateTime?
+  expiresAt     DateTime?
+
+  tenantId Int
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E-COMMERCE — SHIPPING
+// ─────────────────────────────────────────────────────────────────────────────
+
+model ShippingZone {
+  id        String @id @default(cuid())
+  name      String
+  countries Json // string array
+
+  tenantId Int
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  rates ShippingRate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model ShippingRate {
+  id            String   @id @default(cuid())
+  name          String
+  type          String   @default("FLAT") // FLAT | FREE
+  cost          Decimal  @default(0) @db.Decimal(10, 2)
+  minOrderValue Decimal? @db.Decimal(10, 2) // threshold for FREE
+
+  zoneId String
+  zone   ShippingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@index([zoneId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E-COMMERCE — TAXES
+// ─────────────────────────────────────────────────────────────────────────────
+
+model TaxClass {
+  id   String @id @default(cuid())
+  name String
+
+  tenantId Int
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  rates TaxRate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model TaxRate {
+  id          String  @id @default(cuid())
+  country     String
+  state       String?
+  rate        Decimal @db.Decimal(5, 2)
+  isInclusive Boolean @default(false)
+
+  taxClassId String
+  taxClass   TaxClass @relation(fields: [taxClassId], references: [id], onDelete: Cascade)
+
+  @@index([taxClassId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// E-COMMERCE — SETTINGS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model EcommerceSettings {
+  id       Int    @id @default(autoincrement())
+  tenantId Int    @unique
+  tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  currency             String  @default("INR")
+  weightUnit           String  @default("kg")
+  dimensionUnit        String  @default("cm")
+  storeAddress         Json?
+  guestCheckoutEnabled Boolean @default(true)
+  termsRequired        Boolean @default(false)
+  orderNumberPrefix    String  @default("ORD-")
+  codEnabled           Boolean @default(true)
+  razorpayEnabled      Boolean @default(true)
+  razorpayKeyId        String?
+  razorpayKeySecret    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

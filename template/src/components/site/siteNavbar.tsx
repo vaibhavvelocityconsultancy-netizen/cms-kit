@@ -1,0 +1,635 @@
+// new design page
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/src/lib/query-key";
+import { fetchers } from "@/src/lib/fetchers";
+import { useCurrentUser } from "@/src/hooks/use-current-user";
+import { appUrl } from "@/src/lib/base-path";
+import { getBaseUrl } from "@/src/lib/config";
+import { useCart } from "@/src/lib/storefront/cart";
+
+type SiteSettings = {
+  logo?: string;
+  siteName?: string;
+};
+
+type MenuItem = {
+  id: string;
+  label: string;
+  type?: string;
+  slug?: string;
+  url?: string;
+  parentId?: string | null;
+  children?: MenuItem[];
+};
+
+type HeaderMenu = {
+  menuitem?: MenuItem[];
+  menuitems?: MenuItem[];
+  items?: MenuItem[];
+};
+
+type SiteNavbarProps = {
+  settings?: SiteSettings;
+  headerMenu?: HeaderMenu;
+};
+
+function getMenuItems(menu?: HeaderMenu): MenuItem[] {
+  return menu?.menuitem ?? menu?.menuitems ?? menu?.items ?? [];
+}
+
+function buildMenuTree(items: MenuItem[]): MenuItem[] {
+  const itemMap = new Map<string, MenuItem>();
+  const rootItems: MenuItem[] = [];
+
+  items.forEach((item) => {
+    itemMap.set(item.id, {
+      ...item,
+      children: [],
+    });
+  });
+
+  items.forEach((item) => {
+    const currentItem = itemMap.get(item.id);
+
+    if (!currentItem) {
+      return;
+    }
+
+    if (item.parentId && itemMap.has(item.parentId)) {
+      itemMap.get(item.parentId)?.children?.push(currentItem);
+      return;
+    }
+
+    rootItems.push(currentItem);
+  });
+
+  return rootItems;
+}
+
+function getMenuItemHref(item: MenuItem): string {
+  if (item.type === "page" && item.slug) {
+    return `/${item.slug.replace(/^\/+/, "")}`;
+  }
+
+  return item.url || "#";
+}
+
+function isActivePage(pathname: string, href: string): boolean {
+  if (!href || href === "#") {
+    return false;
+  }
+
+  if (href === "/") {
+    return pathname === "/";
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
+  const pathname = usePathname();
+  const { user } = useCurrentUser();
+  const { count: cartCount } = useCart();
+
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const [searchResults, setSearchResults] = useState([]); // ← ADD
+  const [isSearching, setIsSearching] = useState(false); // ← ADD
+  const [openMobileSubmenus, setOpenMobileSubmenus] = useState<Set<string>>(
+    new Set(),
+  );
+
+  function highlightMatch(text, query) {
+    if (!text || !query) return text;
+
+    const parts = text.split(new RegExp(`(${escapeRegex(query)})`, "gi"));
+
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase() ? (
+        <mark key={i} className="bg-yellow-200 text-inherit rounded-sm px-0.5">
+          {part}
+        </mark>
+      ) : (
+        part
+      ),
+    );
+  }
+
+  function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+
+  useEffect(() => {
+    const query = searchValue.trim();
+
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${getBaseUrl()}/api/search?q=${encodeURIComponent(query)}`,
+        );
+        const json = await res.json();
+        setSearchResults(json.data ?? []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  const queryClient = useQueryClient(); // ← add this
+
+  const prefetchPage = (item: MenuItem) => {
+    if (item.type !== "page" || !item.slug) return;
+    const slug = item.slug.replace(/^\/+/, "");
+
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.page(slug),
+      queryFn: () => fetchers.publicPageBySlug(slug),
+      staleTime: 1000 * 60 * 5,
+    });
+  };
+
+  const dashboardUrl =
+    user?.role === "ADMIN" || user?.role === "SUPER_ADMIN"
+      ? "/admin"
+      : "/dashboard";
+
+  const menuItems = useMemo(
+    () => buildMenuTree(getMenuItems(headerMenu)),
+    [headerMenu],
+  );
+
+  const finalMenuItems = useMemo(() => {
+    if (menuItems.length === 0) {
+      return [
+        {
+          id: "shop-static",
+          label: "Shop",
+          type: "custom",
+          url: "/shop",
+          children: [],
+        },
+        {
+          id: "new-static",
+          label: "New arrivals",
+          type: "custom",
+          url: "/categories/new-arrivals",
+          children: [],
+        },
+        {
+          id: "cart-static",
+          label: "Cart",
+          type: "custom",
+          url: "/cart",
+          children: [],
+        },
+      ];
+    }
+
+    return [
+      ...menuItems,
+      {
+        id: "pricing-static",
+        label: "Pricing",
+        type: "custom",
+        url: "/pricing",
+        children: [],
+      },
+    ];
+  }, [menuItems]);
+
+  const logo = settings?.logo;
+  const siteName = settings?.siteName || "iPDAV";
+
+  useEffect(() => {
+    setIsMobileMenuOpen(false);
+    setIsSearchOpen(false);
+    setOpenMobileSubmenus(new Set());
+  }, [pathname]);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+
+    if (isMobileMenuOpen) {
+      document.body.style.overflow = "hidden";
+    }
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileMenuOpen]);
+
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMobileMenuOpen(false);
+        setIsSearchOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const query = searchValue.trim();
+
+    if (!query) {
+      return;
+    }
+
+    setIsSearchOpen(false);
+    setIsMobileMenuOpen(false);
+    window.location.assign(appUrl(`/search?q=${encodeURIComponent(query)}`));
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
+  const toggleMobileSubmenu = (itemId: string) => {
+    setOpenMobileSubmenus((previousItems) => {
+      const nextItems = new Set(previousItems);
+
+      if (nextItems.has(itemId)) {
+        nextItems.delete(itemId);
+      } else {
+        nextItems.add(itemId);
+      }
+
+      return nextItems;
+    });
+  };
+
+  const renderDesktopMenuItems = (items: MenuItem[]): React.ReactNode =>
+    items.map((item) => {
+      const href = getMenuItemHref(item);
+      const hasChildren = Boolean(item.children?.length);
+      const active = isActivePage(pathname, href);
+
+      return (
+        <div key={item.id} className="group relative nav-item">
+          <Link href={href} aria-current={active ? "page" : undefined}>
+            {item.label}
+
+            {hasChildren ? (
+              <span className="ml-1 text-xs opacity-70" aria-hidden="true">
+                ▾
+              </span>
+            ) : null}
+          </Link>
+
+          {hasChildren ? (
+            <div className="invisible absolute left-0 top-full z-50 min-w-56 translate-y-2 border border-white/10 bg-[#0f1b2b] py-2 opacity-0 shadow-2xl transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+              {item.children?.map((child) => {
+                const childHref = getMenuItemHref(child);
+                const childActive = isActivePage(pathname, childHref);
+
+                return (
+                  <Link
+                    key={child.id}
+                    href={childHref}
+                    aria-current={childActive ? "page" : undefined}
+                    className="block whitespace-nowrap px-5 py-2.5 text-[15px] text-white hover:bg-white/10"
+                    onMouseEnter={() => prefetchPage(child)} // ← add this
+                  >
+                    {child.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      );
+    });
+
+  const renderMobileMenuItems = (
+    items: MenuItem[],
+    level = 0,
+  ): React.ReactNode =>
+    items.map((item) => {
+      const href = getMenuItemHref(item);
+      const hasChildren = Boolean(item.children?.length);
+      const isOpen = openMobileSubmenus.has(item.id);
+      const active = isActivePage(pathname, href);
+
+      return (
+        <div
+          key={item.id}
+          className="nav-items border-b border-black/5 last:border-b-0"
+        >
+          <div className="flex items-center">
+            <Link
+              href={href}
+              aria-current={active ? "page" : undefined}
+              onMouseEnter={() => prefetchPage(item)} // ← add this
+            >
+              {item.label}
+              {hasChildren ? (
+                <span className="ml-1 text-xs opacity-70" aria-hidden="true">
+                  ▾
+                </span>
+              ) : null}
+            </Link>
+
+            {hasChildren ? (
+              <button
+                type="button"
+                className="flex h-12 w-12 items-center justify-center text-[#152539]"
+                aria-label={`${isOpen ? "Close" : "Open"} ${item.label} submenu`}
+                aria-expanded={isOpen}
+                onClick={() => toggleMobileSubmenu(item.id)}
+              >
+                <svg
+                  className={`h-4 w-4 transition-transform ${
+                    isOpen ? "rotate-180" : ""
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="m19 9-7 7-7-7"
+                  />
+                </svg>
+              </button>
+            ) : null}
+          </div>
+
+          {hasChildren && isOpen ? (
+            <div className="border-t border-black/5 bg-black/[0.025]">
+              {renderMobileMenuItems(item.children || [], level + 1)}
+            </div>
+          ) : null}
+        </div>
+      );
+    });
+
+  return (
+    <>
+      <header id="site-navbar" className="site-header bg-navy txt-white">
+        <div className="site-container">
+          <div className="topbar relative flex items-center justify-between">
+            <Link href="/" className="brand" aria-label={`${siteName} home`}>
+              {logo ? (
+                <img src={logo} alt={siteName} width="450" height="64" />
+              ) : (
+                <span className="text-2xl font-semibold text-[#152539]">
+                  {siteName}
+                </span>
+              )}
+            </Link>
+
+            <div className="top-actions flex items-center">
+              {!user ? (
+                <>
+                  <Link className="login-link" href="/login">
+                    Log In
+                  </Link>
+
+                  <Link className="signup-link" href="/register">
+                    Sign Up
+                  </Link>
+                </>
+              ) : (
+                <Link className="signup-link" href={dashboardUrl}>
+                  Dashboard
+                </Link>
+              )}
+
+              <span className="top-separator" aria-hidden="true" />
+
+              <button
+                type="button"
+                className="search-button"
+                aria-label="Open search"
+                aria-expanded={isSearchOpen}
+                onClick={() => setIsSearchOpen((current) => !current)}
+              >
+                <span />
+              </button>
+              <Link className="login-link" href="/cart">
+                Cart{cartCount > 0 ? ` (${cartCount})` : ""}
+              </Link>
+            </div>
+
+            <button
+              type="button"
+              className="mobile-menu-button"
+              aria-label="Open navigation menu"
+              aria-expanded={isMobileMenuOpen}
+              aria-controls="mobile-navigation"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+
+            {isSearchOpen ? (
+              <div className="absolute right-0 top-[calc(100%+12px)] z-[70] hidden w-[360px] md:block">
+                <form
+                  onSubmit={(e) => e.preventDefault()} // ← no more navigation
+                  className="flex overflow-hidden rounded-md border border-black/10 bg-white shadow-xl"
+                >
+                  <label className="sr-only" htmlFor="desktop-site-search">
+                    Search
+                  </label>
+
+                  <input
+                    id="desktop-site-search"
+                    type="search"
+                    value={searchValue}
+                    onChange={(event) => setSearchValue(event.target.value)}
+                    placeholder="Search..."
+                    className="min-w-0 flex-1 px-4 py-3 text-sm text-[#152539] outline-none"
+                    autoFocus
+                  />
+                </form>
+
+                {searchValue.trim().length >= 2 && (
+                  <div className="mt-1 max-h-80 overflow-y-auto rounded-md border border-black/10 bg-white shadow-xl">
+                    {isSearching && (
+                      <div className="p-3 text-sm text-gray-500">
+                        Searching...
+                      </div>
+                    )}
+
+                    {!isSearching && searchResults.length === 0 && (
+                      <div className="p-3 text-sm text-gray-500">
+                        No results found
+                      </div>
+                    )}
+
+                    {!isSearching &&
+                      searchResults.map((r) => (
+                        <Link
+                          key={`${r.type}-${r.id}`}
+                          href={
+                            r.type === "post"
+                              ? `/posts/${r.slug}`
+                              : `/${r.slug}`
+                          }
+                          className="block border-b border-black/5 p-3 last:border-0 hover:bg-gray-50"
+                          onClick={() => {
+                            setIsSearchOpen(false);
+                            setSearchValue("");
+                          }}
+                        >
+                          <span className="text-xs uppercase tracking-wide text-gray-400">
+                            {r.type}
+                          </span>
+                          <div className="text-sm font-medium text-[#152539]">
+                            {highlightMatch(r.title, searchValue.trim())}{" "}
+                            {/* ← CHANGED */}
+                          </div>
+                          {r.excerpt && (
+                            <div className="mt-1 text-xs text-gray-500">
+                              {highlightMatch(r.excerpt, searchValue.trim())}{" "}
+                              {/* ← CHANGED */}
+                            </div>
+                          )}
+                        </Link>
+                      ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          <nav className="main-nav" aria-label="Primary navigation">
+            <div className="nav-item-container hidden items-center justify-between lg:flex">
+              {finalMenuItems.length > 0 ? (
+                renderMobileMenuItems(finalMenuItems)
+              ) : (
+                <p className="py-6 text-sm text-[#152539]/70">
+                  No items have been added to the selected header menu.
+                </p>
+              )}{" "}
+            </div>
+          </nav>
+        </div>
+      </header>
+
+      <div
+        className={`fixed inset-0 z-[90] bg-black/55 transition-opacity duration-300 lg:hidden ${
+          isMobileMenuOpen
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0"
+        }`}
+        aria-hidden="true"
+        onClick={closeMobileMenu}
+      />
+
+      <aside
+        id="mobile-navigation"
+        className={`fixed inset-y-0 left-0 z-[100] flex w-[86%] max-w-[360px] flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+        aria-hidden={!isMobileMenuOpen}
+        inert={!isMobileMenuOpen}
+      >
+        <div className="flex min-h-[92px] items-center justify-between border-b border-black/5 bg-[#f7f7f7] px-6">
+          <Link
+            href="/"
+            className="block max-w-[190px]"
+            aria-label={`${siteName} home`}
+            onClick={closeMobileMenu}
+          >
+            {logo ? (
+              <img
+                src={logo}
+                alt={siteName}
+                width="450"
+                height="64"
+                className="max-h-14 w-auto object-contain"
+              />
+            ) : (
+              <span className="text-xl font-semibold text-[#152539]">
+                {siteName}
+              </span>
+            )}
+          </Link>
+
+          <button
+            type="button"
+            className="relative flex h-11 w-11 items-center justify-center text-[#152539]"
+            aria-label="Close navigation menu"
+            onClick={closeMobileMenu}
+          >
+            <span className="absolute h-0.5 w-6 rotate-45 bg-current" />
+            <span className="absolute h-0.5 w-6 -rotate-45 bg-current" />
+          </button>
+        </div>
+
+        <nav
+          className="flex-1 overflow-y-auto px-6 py-1"
+          aria-label="Mobile navigation"
+        >
+          {menuItems.length > 0 ? (
+            renderMobileMenuItems(menuItems)
+          ) : (
+            <p className="py-6 text-sm text-[#152539]/70">
+              No items have been added to the selected header menu.
+            </p>
+          )}
+        </nav>
+
+        <div className="border-t border-black/10 px-6 py-5">
+          {!user ? (
+            <div className="flex items-center gap-6">
+              <Link
+                href="/login"
+                className="font-medium text-[#c00900]"
+                onClick={closeMobileMenu}
+              >
+                Log In
+              </Link>
+
+              <Link
+                href="/register"
+                className="font-medium text-[#15830b]"
+                onClick={closeMobileMenu}
+              >
+                Sign Up
+              </Link>
+            </div>
+          ) : (
+            <Link
+              href={dashboardUrl}
+              className="font-medium text-[#152539]"
+              onClick={closeMobileMenu}
+            >
+              Dashboard
+            </Link>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}

@@ -1,0 +1,29 @@
+# AI & LLM Content Index
+
+**Generated:** 2026-08-23T16:06:36.202Z
+**Site:** http://localhost:3000
+
+---
+
+## Pages (3)
+
+- [Contact ](http://localhost:3000/contact): Updated 2026-08-01
+
+- [About](http://localhost:3000/about): Updated 2026-08-01
+
+- [Home](http://localhost:3000): Updated 2026-08-01
+
+---
+
+## Posts (0)
+
+(No posts)
+
+---
+
+## Summary
+
+- Total Pages: 3
+- Total Posts: 0
+- Total Items: 3
+- Site: http://localhost:3000

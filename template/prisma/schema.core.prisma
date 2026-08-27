@@ -1,0 +1,539 @@
+generator client {
+    provider      = "prisma-client-js"
+    binaryTargets = ["native", "debian-openssl-1.0.x"]
+}
+
+datasource db {
+    provider = "mysql"
+    url      = env("DATABASE_URL")
+}
+
+enum rolepermission_role {
+    SUPER_ADMIN
+    ADMIN
+    EDITOR
+    AUTHOR
+    VIEWER
+    SUBSCRIBER
+}
+
+enum user_role {
+    SUPER_ADMIN
+    ADMIN
+    EDITOR
+    AUTHOR
+    VIEWER
+    SUBSCRIBER
+}
+
+enum sitemapChangeFrequency {
+    ALWAYS
+    HOURLY
+    DAILY
+    WEEKLY
+    MONTHLY
+    YEARLY
+    NEVER
+}
+
+model tenant {
+    id        Int      @id @default(autoincrement())
+    name      String
+    slug      String   @unique
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    users                user[]
+    pages                page[]
+    forms                form[]
+    menus                menu[]
+    posts                post[]
+    collections          collection[]
+    sitesettings         sitesettings?
+    footersettings       footersettings[]
+    categories           category[]
+    tags                 tag[]
+    media                media[]
+    NavbarConfig         NavbarConfig?
+    breadcrumbSettings   BreadcrumbSettings?
+    footerConfig         FooterConfig?
+    pricingPageSettings  pricingPageSettings?
+    pageElementOverrides PageElementOverride[]
+    redirects            Redirect[]
+    notFoundLogs         NotFoundLog[]
+    redirectImports      RedirectImport[]
+    trackingSettings     TrackingSettings?
+    analyticsSettings    analyticsSettings?
+    aicrawlSettings      AICrawlSettings?
+    aicrawlContents      AICrawlContent[]
+    internalLinkRules    InternalLinkRule[]
+    uploadedFiles        UploadedFile[]
+    plans                Plan[]
+    planSettings         PlanSettings?
+    fileCategories       FileCategory[]
+    brands               Brand[]
+    productCategories    ProductCategory[]
+    attributes           Attribute[]
+    products             Product[]
+    orders               Order[]
+    carts                Cart[]
+    coupons              Coupon[]
+    shippingZones        ShippingZone[]
+    taxClasses           TaxClass[]
+    ecommerceSettings    EcommerceSettings?
+}
+
+model user {
+    id        Int       @id @default(autoincrement())
+    email     String    @unique
+    password  String
+    name      String?
+    role      user_role @default(SUBSCRIBER)
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+    tenantId  Int
+    tenant    tenant    @relation(fields: [tenantId], references: [id])
+
+    collection        collection[]
+    comment           comment[]
+    post              post[]
+    userpermission    userpermission[]
+    payments          Payment[]
+    subscriptions     Subscription[]
+    uploadedFiles     UploadedFile[]
+    fileShares        FileShareLink[]
+    planSubscriptions PlanSubscription[]
+    planEnrollments   PlanEnrollment[]
+    customerAddresses CustomerAddress[]
+    orders            Order[]
+    carts             Cart[]
+}
+
+model permission {
+    id             Int              @id @default(autoincrement())
+    name           String           @unique
+    description    String?          @db.Text
+    isVisible      Boolean          @default(true)
+    rolepermission rolepermission[]
+    userpermission userpermission[]
+
+    @@index([name])
+}
+
+model rolepermission {
+    id           Int                 @id @default(autoincrement())
+    role         rolepermission_role
+    permissionId Int
+    isVisible    Boolean             @default(true)
+    permission   permission          @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+    @@unique([role, permissionId])
+    @@index([permissionId])
+    @@index([role])
+}
+
+model userpermission {
+    id           Int        @id @default(autoincrement())
+    userId       Int
+    permissionId Int
+    allowed      Boolean    @default(true)
+    permission   permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+    user         user       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([userId, permissionId])
+    @@index([permissionId])
+    @@index([userId])
+}
+
+model sitesettings {
+    id                     Int       @id @default(1)
+    siteName               String?
+    siteTagline            String?
+    logo                   String?
+    favicon                String?
+    defaultMetaTitle       String?
+    defaultMetaDescription String?   @db.Text
+    postsPerPage           Int       @default(10)
+    homepageType           String    @default("posts")
+    homepagePageId         Int?
+    postsPageId            Int?
+    globalCss              String?   @db.Text
+    globalJs               String?   @db.Text
+    showAdminToolbar       Boolean   @default(true)
+    tenantId               Int       @unique
+    createdAt              DateTime  @default(now())
+    updatedAt              DateTime  @updatedAt
+    sitemapEnabled         Boolean   @default(true)
+    sitemapCacheMinutes    Int       @default(10)
+    sitemapLastGeneratedAt DateTime?
+    sitemapCustomUrl       String?
+    includePages           Boolean   @default(true)
+    includePosts           Boolean   @default(true)
+    includeCategories      Boolean   @default(true)
+    includeTags            Boolean   @default(false)
+    pingSearchEngines      Boolean   @default(false)
+    cachedSitemapXml       String?
+    cachedSitemapExpiresAt DateTime?
+    highlightAutoLinks     Boolean   @default(false)
+    seoEnabled             Boolean   @default(false)
+    tenant                 tenant    @relation(fields: [tenantId], references: [id])
+    robotsEnabled          Boolean   @default(false)
+    robotsContent          String?   @db.Text
+    customCrawlerRules     String?   @db.Text
+}
+
+model footersettings {
+    id       Int    @id @default(autoincrement())
+    key      String @unique
+    tenantId Int
+    value    Json
+    tenant   tenant @relation(fields: [tenantId], references: [id])
+
+    @@index([tenantId])
+}
+
+model NavbarConfig {
+    id             String   @id @default(cuid())
+    tenantId       Int      @unique
+    bgColor        String   @default("#0B0F1A")
+    bgOpacity      Int      @default(90)
+    linkColor      String   @default("#cbd5e1")
+    linkHoverColor String   @default("#ffffff")
+    accentColor    String   @default("#22d3ee")
+    dropdownBg     String   @default("#111827")
+    sticky         Boolean  @default(true)
+    blur           Boolean  @default(true)
+    showLogin      Boolean  @default(true)
+    showSignup     Boolean  @default(true)
+    showPricing    Boolean  @default(true)
+    loginLabel     String   @default("Log In")
+    signupLabel    String   @default("Sign Up")
+    pricingLabel   String   @default("Pricing")
+    customCss      String?  @db.Text
+    updatedAt      DateTime @updatedAt
+    createdAt      DateTime @default(now())
+    tenant         tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model FooterConfig {
+    id               String   @id @default(cuid())
+    tenantId         Int      @unique
+    bgColor          String   @default("#0B0F1A")
+    borderColor      String   @default("#ffffff")
+    borderOpacity    Int      @default(8)
+    headingColor     String   @default("#ffffff")
+    textColor        String   @default("#cbd5e1")
+    mutedTextColor   String   @default("#94a3b8")
+    bottomTextColor  String   @default("#64748b")
+    accentColor      String   @default("#22d3ee")
+    accentHoverColor String   @default("#67e8f9")
+    ctaTextColor     String   @default("#0f172a")
+    eyebrowText      String   @default("Let's Start a Conversation")
+    headline         String   @default("Ready to grow your business?")
+    showCta          Boolean  @default(true)
+    customCss        String?  @db.Text
+    updatedAt        DateTime @updatedAt
+    createdAt        DateTime @default(now())
+    tenant           tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model BreadcrumbSettings {
+    id                String   @id @default(cuid())
+    tenantId          Int      @unique
+    enabled           Boolean  @default(true)
+    homeLabel         String   @default("Home")
+    homeUrl           String?
+    separator         String   @default("/")
+    showHome          Boolean  @default(true)
+    showCurrent       Boolean  @default(true)
+    showParent        Boolean  @default(true)
+    pagesEnabled      Boolean  @default(true)
+    postsEnabled      Boolean  @default(true)
+    categoriesEnabled Boolean  @default(true)
+    tagsEnabled       Boolean  @default(true)
+    hideOnHome        Boolean  @default(true)
+    hideOn404         Boolean  @default(true)
+    hideOnSearch      Boolean  @default(false)
+    schemaEnabled     Boolean  @default(true)
+    cssClass          String?
+    customCss         String?  @db.Text
+    linkColor         String   @default("#4b5563")
+    linkHoverColor    String   @default("#111827")
+    currentColor      String   @default("#6b7280")
+    separatorColor    String   @default("#9ca3af")
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+    tenant            tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+enum BillingCycle {
+    MONTHLY
+    YEARLY
+    LIFETIME
+}
+
+enum PaymentStatus {
+    PENDING
+    SUCCESS
+    FAILED
+}
+
+enum SubscriptionStatus {
+    TRIAL
+    ACTIVE
+    EXPIRED
+    CANCELED
+    PENDING
+}
+
+model Payment {
+    id                   String        @id @default(cuid())
+    userId               Int
+    courseId             Int?
+    planId               Int?
+    billingCycle         BillingCycle  @default(LIFETIME)
+    paypalOrderId        String?       @unique
+    paypalCaptureId      String?       @unique
+    paypalSubscriptionId String?
+    amount               Int
+    currency             String        @default("INR")
+    status               PaymentStatus @default(PENDING)
+    createdAt            DateTime      @default(now())
+    updatedAt            DateTime      @updatedAt
+    user                 user          @relation(fields: [userId], references: [id], onDelete: Cascade)
+    plan                 Plan?         @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+    @@index([userId])
+    @@index([courseId])
+    @@index([planId])
+    @@index([status])
+    @@index([createdAt])
+}
+
+model Subscription {
+    id               Int                @id @default(autoincrement())
+    userId           Int
+    courseId         Int
+    billingCycle     BillingCycle       @default(MONTHLY)
+    status           SubscriptionStatus @default(TRIAL)
+    startsAt         DateTime
+    currentPeriodEnd DateTime
+    canceledAt       DateTime?
+    createdAt        DateTime           @default(now())
+    updatedAt        DateTime           @updatedAt
+    user             user               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([userId, courseId])
+    @@index([userId])
+    @@index([courseId])
+    @@index([status])
+    @@index([currentPeriodEnd])
+}
+
+model Plan {
+    id                  Int                @id @default(autoincrement())
+    tenantId            Int
+    title               String
+    slug                String
+    tagline             String?
+    description         String?
+    monthlyPrice        Decimal?           @db.Decimal(10, 2)
+    yearlyPrice         Decimal?           @db.Decimal(10, 2)
+    allowMonthly        Boolean            @default(true)
+    allowYearly         Boolean            @default(true)
+    billingPeriodDays   Int?
+    paypalMonthlyPlanId String?
+    paypalYearlyPlanId  String?
+    trialDays           Int?
+    isFeatured          Boolean            @default(false)
+    isPublished         Boolean            @default(true)
+    sortOrder           Int                @default(0)
+    createdAt           DateTime           @default(now())
+    updatedAt           DateTime           @updatedAt
+    tenant              tenant             @relation(fields: [tenantId], references: [id])
+    features            PlanFeature[]
+    payments            Payment[]
+    subscriptions       PlanSubscription[]
+    enrollments         PlanEnrollment[]
+
+    @@unique([slug, tenantId])
+    @@index([tenantId])
+}
+
+model PlanSettings {
+    id               Int      @id @default(autoincrement())
+    tenantId         Int      @unique
+    defaultTrialDays Int      @default(7)
+    updatedAt        DateTime @updatedAt
+    tenant           tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model PlanFeature {
+    id        Int    @id @default(autoincrement())
+    title     String
+    sortOrder Int    @default(0)
+    plan      Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+    planId    Int
+
+    @@index([planId])
+}
+
+model PlanSubscription {
+    id                   Int                @id @default(autoincrement())
+    userId               Int
+    planId               Int
+    billingCycle         BillingCycle       @default(MONTHLY)
+    status               SubscriptionStatus @default(TRIAL)
+    startsAt             DateTime
+    currentPeriodEnd     DateTime
+    trialEndsAt          DateTime?
+    paypalSubscriptionId String?            @unique
+    canceledAt           DateTime?
+    createdAt            DateTime           @default(now())
+    updatedAt            DateTime           @updatedAt
+    user                 user               @relation(fields: [userId], references: [id], onDelete: Cascade)
+    plan                 Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+    @@unique([userId, planId])
+    @@index([userId])
+    @@index([planId])
+    @@index([status])
+    @@index([currentPeriodEnd])
+}
+
+model PlanEnrollment {
+    id          Int      @id @default(autoincrement())
+    userId      Int
+    planId      Int
+    purchasedAt DateTime @default(now())
+    user        user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    plan        Plan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+    @@unique([userId, planId])
+    @@index([userId])
+    @@index([planId])
+}
+
+model EmailTemplate {
+    id            String     @id @default(cuid())
+    triggerEvent  String
+    recipientType String
+    name          String
+    subject       String
+    bodyHtml      String     @db.Text
+    isActive      Boolean    @default(true)
+    variables     Json?
+    createdAt     DateTime   @default(now())
+    updatedAt     DateTime   @updatedAt
+    logs          EmailLog[]
+
+    @@unique([triggerEvent, recipientType])
+}
+
+model EmailSettings {
+    id             String    @id @default("singleton")
+    senderName     String    @default("")
+    fromEmail      String    @default("")
+    replyToEmail   String?
+    adminEmail     String    @default("")
+    lastTestStatus String?
+    lastTestAt     DateTime?
+    lastTestError  String?   @db.Text
+    updatedAt      DateTime  @updatedAt
+}
+
+model EmailLog {
+    id            String         @id @default(cuid())
+    templateId    String?
+    triggerEvent  String
+    recipientType String
+    emailTo       String
+    subject       String
+    status        String
+    provider      String
+    error         String?        @db.Text
+    metadata      Json?
+    sentAt        DateTime?
+    createdAt     DateTime       @default(now())
+    template      EmailTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+    @@index([status])
+    @@index([triggerEvent])
+    @@index([templateId])
+}
+
+model FileCategory {
+    id          String         @id @default(cuid())
+    name        String
+    slug        String
+    description String?        @db.Text
+    parentId    String?
+    tenantId    Int
+    tenant      tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+    parent      FileCategory?  @relation("FileCategoryHierarchy", fields: [parentId], references: [id])
+    children    FileCategory[] @relation("FileCategoryHierarchy")
+    files       UploadedFile[]
+    createdAt   DateTime       @default(now())
+    updatedAt   DateTime       @updatedAt
+
+    @@unique([tenantId, slug])
+    @@index([tenantId])
+    @@index([parentId])
+}
+
+model UploadedFile {
+    id           String          @id @default(cuid())
+    title        String
+    shortDesc    String?         @db.Text
+    description  String?         @db.Text
+    isShareable  Boolean         @default(true)
+    tags         String?         @db.Text
+    fileName     String
+    originalName String
+    url          String
+    mimeType     String
+    size         Int
+    uploadedBy   Int
+    tenantId     Int
+    categoryId   String?
+    category     FileCategory?   @relation(fields: [categoryId], references: [id])
+    createdAt    DateTime        @default(now())
+    updatedAt    DateTime        @updatedAt
+    tenant       tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+    uploader     user            @relation(fields: [uploadedBy], references: [id])
+    shareFiles   FileShareFile[]
+
+    @@index([tenantId])
+    @@index([uploadedBy])
+    @@index([categoryId])
+}
+
+model FileShareLink {
+    id              String          @id @default(cuid())
+    sharedWith      String
+    message         String?         @db.Text
+    password        String
+    createdBy       Int
+    token           String          @unique @default(cuid())
+    viewedAt        DateTime?
+    zipDownloadedAt DateTime?
+    createdAt       DateTime        @default(now())
+    creator         user            @relation(fields: [createdBy], references: [id])
+    files           FileShareFile[]
+
+    @@index([token])
+    @@index([createdBy])
+}
+
+model FileShareFile {
+    id           String        @id @default(cuid())
+    shareLinkId  String
+    fileId       String
+    downloadedAt DateTime?
+    shareLink    FileShareLink @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
+    file         UploadedFile  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+    @@unique([shareLinkId, fileId])
+    @@index([shareLinkId])
+    @@index([fileId])
+}

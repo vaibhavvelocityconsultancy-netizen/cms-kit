@@ -1,0 +1,45 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — MEDIA / COLLECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+model media {
+  id           Int      @id @default(autoincrement())
+  fileName     String
+  originalName String
+  url          String
+  publicId     String?  @db.VarChar(255)
+  mimeType     String
+  size         Int
+  width        Int?
+  height       Int?
+  altText      String?
+  title        String?
+  caption      String?  @db.Text
+  description  String?  @db.Text
+  createdAt    DateTime @default(now())
+  tenantId     Int
+  collectionId Int?
+
+  tenant     tenant      @relation(fields: [tenantId], references: [id])
+  collection collection? @relation(fields: [collectionId], references: [id])
+
+  @@index([tenantId])
+  @@index([collectionId])
+}
+
+model collection {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?  @db.Text
+  userId      Int
+  tenantId    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   user    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant tenant  @relation(fields: [tenantId], references: [id])
+  media  media[]
+
+  @@unique([userId, name])
+  @@index([userId])
+}

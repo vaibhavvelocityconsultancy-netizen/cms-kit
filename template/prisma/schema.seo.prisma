@@ -1,0 +1,149 @@
+model analyticsSettings {
+    id Int @id @default(autoincrement())
+
+    tenantId Int    @unique
+    tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+    gtmId               String?
+    gtmHeadScript       String? @db.Text
+    gtmBodyScript       String? @db.Text
+    gaMeasurementId     String?
+    gaHeadScript        String? @db.Text
+    facebookPixelId     String?
+    facebookHeadScript  String? @db.Text
+    googleAdsId         String?
+    googleAdsHeadScript String? @db.Text
+
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+    autoGenerateScripts Boolean  @default(true)
+}
+
+model TrackingSettings {
+    id Int @id @default(autoincrement())
+
+    tenantId Int    @unique
+    tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+    gtmId           String?
+    gaMeasurementId String?
+    facebookPixelId String?
+    googleAdsId     String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model AICrawlSettings {
+    id Int @id @default(autoincrement())
+
+    tenantId Int    @unique
+    tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+    enableMarkdownGeneration Boolean @default(true)
+    includePages             Boolean @default(true)
+    includePosts             Boolean @default(true)
+    excludeDrafts            Boolean @default(true)
+
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+    autoGenerateScripts Boolean  @default(true)
+}
+
+model AICrawlContent {
+    id Int @id @default(autoincrement())
+
+    tenantId Int
+    tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+    contentType String
+    contentId   String
+    slug        String
+    title       String
+    markdown    String @db.Text
+    wordCount   Int    @default(0)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([tenantId, contentType, contentId])
+    @@index([tenantId])
+    @@index([contentType])
+}
+
+model InternalLinkRule {
+    id String @id @default(cuid())
+
+    tenantId Int
+    tenant   tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+    keyword             String
+    destinationType     String?
+    destinationId       String?
+    destinationUrl      String
+    linkTitle           String?
+    openInNewTab        Boolean  @default(false)
+    enabled             Boolean  @default(true)
+    wholeWordOnly       Boolean  @default(true)
+    caseSensitive       Boolean  @default(false)
+    firstOccurrenceOnly Boolean  @default(false)
+    ignoreHeadings      Boolean  @default(true)
+    ignoreExistingLinks Boolean  @default(true)
+    maxLinksPerPage     Int      @default(1)
+    priority            Int      @default(0)
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+
+    @@index([tenantId])
+    @@index([keyword])
+}
+
+model Redirect {
+    id             String    @id @default(cuid())
+    sourceUrl      String    @unique
+    destinationUrl String
+    statusCode     Int       @default(301)
+    isActive       Boolean   @default(true)
+    description    String?
+    createdAt      DateTime  @default(now())
+    updatedAt      DateTime  @updatedAt
+    createdBy      String?
+    isAutoDetected Boolean   @default(false)
+    hitCount       Int       @default(0)
+    lastUsedAt     DateTime?
+    tenantId       Int
+    tenant         tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+    @@index([sourceUrl])
+    @@index([isActive])
+}
+
+model NotFoundLog {
+    id           String   @id @default(cuid())
+    path         String
+    referrer     String?
+    userAgent    String?
+    ipAddress    String?
+    suggestedUrl String?
+    redirectId   String?
+    isResolved   Boolean  @default(false)
+    occurredAt   DateTime @default(now())
+    tenantId     Int
+    tenant       tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+    @@index([path])
+    @@index([isResolved])
+}
+
+model RedirectImport {
+    id           String   @id @default(cuid())
+    filename     String
+    totalCount   Int
+    successCount Int
+    failureCount Int
+    errors       String?
+    importedBy   String
+    importedAt   DateTime @default(now())
+    tenantId     Int
+    tenant       tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}

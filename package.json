@@ -1,0 +1,25 @@
+{
+  "name": "create-cmskit",
+  "version": "0.1.0",
+  "description": "Create a CMSKit project",
+  "type": "module",
+  "bin": {
+    "create-cmskit": "bin/create-cmskit.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "template"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node bin/create-cmskit.js"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.8.3",
+    "fs-extra": "^11.3.0",
+    "mysql2": "^3.24.2"
+  }
+}

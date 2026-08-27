@@ -1,0 +1,123 @@
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — POST / CATEGORY / TAG / COMMENT
+// ─────────────────────────────────────────────────────────────────────────────
+enum status {
+  DRAFT
+  PUBLISHED
+
+  @@map("post_status")
+}
+
+enum comment_status {
+  PENDING
+  APPROVED
+  SPAM
+  TRASH
+}
+
+model post {
+  id            String    @id
+  title         String
+  slug          String
+  excerpt       String?   @db.Text
+  content       String    @db.Text
+  featuredImage String?
+  status        status    @default(PUBLISHED)
+  authorId      Int?
+  seoData       Json?
+  publishedAt   DateTime?
+
+  searchText String? @db.Text
+
+  sitemapEnabled Boolean @default(true)
+
+  sitemapPriority   Decimal                @default(0.8) @db.Decimal(2, 1)
+  sitemapChangeFreq sitemapChangeFrequency @default(WEEKLY)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  format            String                 @default("standard")
+  tenantId          Int
+
+  comment  comment[]
+  user     user?      @relation(fields: [authorId], references: [id])
+  category category[] @relation("categorytopost")
+  tag      tag[]      @relation("posttotag")
+  tenant   tenant     @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, slug])
+  @@index([authorId])
+  @@index([tenantId])
+}
+
+model category {
+  id          String  @id
+  name        String
+  slug        String
+  description String? @db.Text
+  parentId    String?
+  tenantId    Int
+
+  tenant         tenant     @relation(fields: [tenantId], references: [id])
+  category       category?  @relation("categoryTocategory", fields: [parentId], references: [id])
+  other_category category[] @relation("categoryTocategory")
+  post           post[]     @relation("categorytopost")
+  sitemapEnabled Boolean    @default(true)
+
+  sitemapPriority Decimal @default(0.5) @db.Decimal(2, 1)
+
+  sitemapChangeFreq sitemapChangeFrequency @default(WEEKLY)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([parentId])
+}
+
+model tag {
+  id       String @id
+  name     String
+  slug     String
+  tenantId Int
+
+  tenant tenant @relation(fields: [tenantId], references: [id])
+  post   post[] @relation("posttotag")
+
+  sitemapEnabled Boolean @default(false)
+
+  sitemapPriority Decimal @default(0.8) @db.Decimal(2, 1)
+
+  sitemapChangeFreq sitemapChangeFrequency @default(WEEKLY)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model comment {
+  id          String         @id @default(uuid())
+  content     String         @db.Text
+  authorName  String
+  authorEmail String
+  authorUrl   String?
+  ipAddress   String?
+  userAgent   String?
+  status      comment_status @default(PENDING)
+  postId      String
+  userId      Int?
+  parentId    String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  comment       comment?  @relation("commentTocomment", fields: [parentId], references: [id])
+  other_comment comment[] @relation("commentTocomment")
+  post          post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user          user?     @relation(fields: [userId], references: [id])
+
+  @@index([parentId])
+  @@index([postId])
+  @@index([userId])
+}

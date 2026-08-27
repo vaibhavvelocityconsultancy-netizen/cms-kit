@@ -1,0 +1,64 @@
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — PAGE
+// ─────────────────────────────────────────────────────────────────────────────
+
+model page {
+  id                Int     @id @default(autoincrement())
+  title             String
+  slug              String
+  html              String  @db.Text
+  css               String? @db.Text
+  js                String? @db.Text
+  jsxCode           String? @db.Text
+  pageType          String  @default("html")
+  status            status  @default(PUBLISHED)
+  seoData           Json?
+  sitemapEnabled    Boolean @default(true)
+  componentSettings Json?
+  searchText        String? @db.Text
+
+  sitemapPriority      Decimal                @default(0.8) @db.Decimal(2, 1)
+  sitemapChangeFreq    sitemapChangeFrequency @default(WEEKLY)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  tenant               tenant                 @relation(fields: [tenantId], references: [id])
+  tenantId             Int
+  pageElementOverrides PageElementOverride[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model PageElementOverride {
+  id        String   @id @default(cuid())
+  pageId    Int
+  editorId  String
+  styles    Json?
+  classes   String?
+  text      String?
+  link      String?
+  tenantId  Int
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  page   page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  tenant tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, editorId])
+  @@index([tenantId])
+  @@index([pageId])
+}
+
+model pricingPageSettings {
+  id        Int      @id @default(autoincrement())
+  formId    Int?
+  tenantId  Int      @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  form form? @relation(fields: [formId], references: [id], onDelete: SetNull)
+}

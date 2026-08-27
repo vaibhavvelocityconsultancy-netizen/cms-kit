@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.next/
+.vercel
+.env*
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials

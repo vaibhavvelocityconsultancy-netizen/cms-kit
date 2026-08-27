@@ -1,0 +1,32 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// CMS — MENU / MENUITEM
+// ─────────────────────────────────────────────────────────────────────────────
+
+model menu {
+  id       Int    @id @default(autoincrement())
+  name     String
+  location String @default("none")
+  tenantId Int
+
+  tenant   tenant     @relation(fields: [tenantId], references: [id])
+  menuitem menuitem[]
+}
+
+model menuitem {
+  id       Int     @id @default(autoincrement())
+  label    String
+  type     String
+  slug     String?
+  url      String?
+  order    Int
+  menuId   Int
+  parentId Int?
+
+  menu           menu       @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  menuitem       menuitem?  @relation("menuitemTomenuitem", fields: [parentId], references: [id])
+  other_menuitem menuitem[] @relation("menuitemTomenuitem")
+
+  @@index([menuId])
+  @@index([parentId])
+}
+
