@@ -7,6 +7,7 @@ const SETTINGS_ID = 1;
 
 // helper
 export async function getPublicAnalyticsSettings(tenantId) {
+  if (!prisma.analyticsSettings) return null; // SEO module not installed
   return prisma.analyticsSettings.findUnique({
     where: {
       tenantId,
@@ -70,6 +71,8 @@ export async function getPublicFooterSettings(tenantId) {
 }
 
 export async function getPublicMenus(tenantId) {
+  if (!prisma.menu) return []; // Menus module not installed
+
   const where = tenantId !== undefined ? { tenantId } : {};
 
   return prisma.menu.findMany({
@@ -81,11 +84,6 @@ export async function getPublicMenus(tenantId) {
     },
   });
 }
-
-// export async function getPublicFooterMenus(tenantId) {
-//   const menus = await getPublicMenus(tenantId);
-//   return menus.filter((m) => m.location === "footer");
-// }
 
 export async function getPublicPageById(id, tenantId) {
   const where = {
@@ -170,6 +168,8 @@ export async function getPublicPosts(tenantId) {
 }
 
 export async function getPublicPlans(tenantId) {
+  if (!prisma.plan) return []; // safety guard
+
   const where = {
     isPublished: true,
     ...(tenantId !== undefined ? { tenantId } : {}),
@@ -202,9 +202,11 @@ export async function getPublicBootstrapData(tenantId) {
     settings.homepageType === "page" && settings.homepagePageId
       ? getPublicPageById(settings.homepagePageId, resolvedTenantId)
       : Promise.resolve(null),
-    prisma.breadcrumbSettings.findUnique({
-      where: { tenantId: resolvedTenantId },
-    }),
+    prisma.breadcrumbSettings
+      ? prisma.breadcrumbSettings.findUnique({
+          where: { tenantId: resolvedTenantId },
+        })
+      : Promise.resolve(null),
     getPublicNavbarConfig(resolvedTenantId),
     getPublicFooterConfig(resolvedTenantId),
     getPublicAnalyticsSettings(resolvedTenantId),
@@ -223,9 +225,9 @@ export async function getPublicBootstrapData(tenantId) {
     footerMenus: menus.filter((m) => m.location === "footer"),
     footerSettings,
     breadcrumbSettings,
-    navbarConfig, // ← new
+    navbarConfig,
     footerConfig,
-    analyticsSettings, // ← new
+    analyticsSettings,
 
     assets: {
       css: settings.globalCss ?? "",

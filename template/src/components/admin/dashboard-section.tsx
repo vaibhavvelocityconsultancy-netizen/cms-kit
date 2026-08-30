@@ -627,9 +627,9 @@ export function DashboardSection() {
                   transition={{ delay: 0.6 + idx * 0.1 }}
                   className="p-4 hover:bg-muted/30 transition-colors group cursor-pointer"
                   onClick={() =>
-                    (window.location.href = appUrl(
-                      `/admin/${activity.type}s/${activity.slug}`,
-                    ))
+                  (window.location.href = appUrl(
+                    `/admin/${activity.type}s/${activity.slug}`,
+                  ))
                   }
                 >
                   <div className="flex items-start justify-between">
@@ -639,12 +639,11 @@ export function DashboardSection() {
                           {activity.action}
                         </span>
                         <div
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            activity.status === "published" ||
-                            activity.status === "PUBLISHED"
+                          className={`w-1.5 h-1.5 rounded-full ${activity.status === "published" ||
+                              activity.status === "PUBLISHED"
                               ? "bg-green-500"
                               : "bg-amber-500"
-                          }`}
+                            }`}
                         />
                       </div>
                       <p className="text-sm text-muted-foreground">

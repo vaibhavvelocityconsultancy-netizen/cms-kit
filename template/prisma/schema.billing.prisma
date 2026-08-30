@@ -1,0 +1,147 @@
+enum BillingCycle {
+    MONTHLY
+    YEARLY
+    LIFETIME
+}
+
+enum PaymentStatus {
+    PENDING
+    SUCCESS
+    FAILED
+}
+
+enum SubscriptionStatus {
+    TRIAL
+    ACTIVE
+    EXPIRED
+    CANCELED
+    PENDING
+}
+
+model Payment {
+    id                   String        @id @default(cuid())
+    userId               Int
+    courseId             Int?
+    planId               Int?
+    billingCycle         BillingCycle  @default(LIFETIME)
+    paypalOrderId        String?       @unique
+    paypalCaptureId      String?       @unique
+    paypalSubscriptionId String?
+    amount               Int
+    currency             String        @default("INR")
+    status               PaymentStatus @default(PENDING)
+    createdAt            DateTime      @default(now())
+    updatedAt            DateTime      @updatedAt
+    user                 user          @relation(fields: [userId], references: [id], onDelete: Cascade)
+    plan                 Plan?         @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+    @@index([userId])
+    @@index([courseId])
+    @@index([planId])
+    @@index([status])
+    @@index([createdAt])
+}
+
+model Subscription {
+    id               Int                @id @default(autoincrement())
+    userId           Int
+    courseId         Int
+    billingCycle     BillingCycle       @default(MONTHLY)
+    status           SubscriptionStatus @default(TRIAL)
+    startsAt         DateTime
+    currentPeriodEnd DateTime
+    canceledAt       DateTime?
+    createdAt        DateTime           @default(now())
+    updatedAt        DateTime           @updatedAt
+    user             user               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([userId, courseId])
+    @@index([userId])
+    @@index([courseId])
+    @@index([status])
+    @@index([currentPeriodEnd])
+}
+
+model Plan {
+    id                  Int                @id @default(autoincrement())
+    tenantId            Int
+    title               String
+    slug                String
+    tagline             String?
+    description         String?
+    monthlyPrice        Decimal?           @db.Decimal(10, 2)
+    yearlyPrice         Decimal?           @db.Decimal(10, 2)
+    allowMonthly        Boolean            @default(true)
+    allowYearly         Boolean            @default(true)
+    billingPeriodDays   Int?
+    paypalMonthlyPlanId String?
+    paypalYearlyPlanId  String?
+    trialDays           Int?
+    isFeatured          Boolean            @default(false)
+    isPublished         Boolean            @default(true)
+    sortOrder           Int                @default(0)
+    createdAt           DateTime           @default(now())
+    updatedAt           DateTime           @updatedAt
+    tenant              tenant             @relation(fields: [tenantId], references: [id])
+    features            PlanFeature[]
+    payments            Payment[]
+    subscriptions       PlanSubscription[]
+    enrollments         PlanEnrollment[]
+
+    @@unique([slug, tenantId])
+    @@index([tenantId])
+}
+
+model PlanSettings {
+    id               Int      @id @default(autoincrement())
+    tenantId         Int      @unique
+    defaultTrialDays Int      @default(7)
+    updatedAt        DateTime @updatedAt
+    tenant           tenant   @relation(fields: [tenantId], references: [id])
+}
+
+model PlanFeature {
+    id        Int    @id @default(autoincrement())
+    title     String
+    sortOrder Int    @default(0)
+    plan      Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+    planId    Int
+
+    @@index([planId])
+}
+
+model PlanSubscription {
+    id                   Int                @id @default(autoincrement())
+    userId               Int
+    planId               Int
+    billingCycle         BillingCycle       @default(MONTHLY)
+    status               SubscriptionStatus @default(TRIAL)
+    startsAt             DateTime
+    currentPeriodEnd     DateTime
+    trialEndsAt          DateTime?
+    paypalSubscriptionId String?            @unique
+    canceledAt           DateTime?
+    createdAt            DateTime           @default(now())
+    updatedAt            DateTime           @updatedAt
+    user                 user               @relation(fields: [userId], references: [id], onDelete: Cascade)
+    plan                 Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+    @@unique([userId, planId])
+    @@index([userId])
+    @@index([planId])
+    @@index([status])
+    @@index([currentPeriodEnd])
+}
+
+model PlanEnrollment {
+    id          Int      @id @default(autoincrement())
+    userId      Int
+    planId      Int
+    purchasedAt DateTime @default(now())
+    user        user     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    plan        Plan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+    @@unique([userId, planId])
+    @@index([userId])
+    @@index([planId])
+}

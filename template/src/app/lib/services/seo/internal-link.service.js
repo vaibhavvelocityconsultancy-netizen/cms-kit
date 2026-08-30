@@ -428,6 +428,7 @@ export async function resolveDestinationUrl(rule, tenantId) {
 
 export async function processInternalLinks(html, tenantId) {
   if (!html) return html;
+  if (!prisma.internalLinkRule) return html;
 
   const rules = await prisma.internalLinkRule.findMany({
     where: { tenantId, enabled: true },

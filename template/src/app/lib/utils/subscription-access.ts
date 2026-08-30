@@ -21,6 +21,10 @@ import { ApiError } from "./ApiError";
 export async function requireActiveSubscription() {
   const session = await requireAuth();
 
+  if (!prisma.planSubscription) {
+    return session;
+  }
+
   const subscription = await prisma.planSubscription.findFirst({
     where: {
       userId: Number(session.user.id),

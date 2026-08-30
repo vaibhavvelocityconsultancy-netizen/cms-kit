@@ -11,7 +11,7 @@ import {
   Map,
   Hash,
   Layout,
-  LayoutDashboard,
+  LayoutDashboard,  
   LogOut,
   Menu,
   Newspaper,
@@ -51,6 +51,7 @@ import { authApi } from "@/src/lib/auth";
 import { getApiBaseUrl } from "@/src/lib/axios";
 import { getBaseUrl } from "@/src/lib/config";
 import { useModuleFlags } from "@/src/lib/ecom/useModuleFlags";
+import { useInstalledModules } from "@/src/lib/useInstalledModules";
 import {
   Sidebar as UISidebar,
   SidebarContent,
@@ -81,6 +82,7 @@ interface NavItem {
   href?: string;
   children?: NavItem[];
   modulePermission?: string;
+  module?: string;
   badge?: number;
 }
 
@@ -148,6 +150,7 @@ const adminNavItems: NavItem[] = [
     icon: FileText,
     description: "Manage Media Library",
     modulePermission: "media_upload",
+    module: "media",
     children: [
       {
         id: "all-media",
@@ -170,7 +173,8 @@ const adminNavItems: NavItem[] = [
     label: "Menus",
     icon: Menu,
     description: "Navigation structure",
-    modulePermission: "menus_manage",
+    modulePermission: "menus_manage", 
+    module: "menus",
     href: "/admin/menus",
   },
 
@@ -180,8 +184,9 @@ const adminNavItems: NavItem[] = [
     icon: Form,
     description: "Manage forms",
     // modulePermission: "forms_access",
+    module: "forms",
     href: "/admin/forms",
-  },
+  },  
 
   {
     id: "customize",
@@ -205,6 +210,7 @@ const adminNavItems: NavItem[] = [
     label: "Plan Management",
     icon: ShoppingBag,
     description: "Manage plans and subscriptions",
+    module: "billing",
     // modulePermission: "plans_manage",
     href: "/admin/plan-management",
   },
@@ -229,6 +235,7 @@ const adminNavItems: NavItem[] = [
     id: "ecommerce",
     label: "E-commerce",
     icon: ShoppingBag,
+    module: "ecommerce",
     children: [
       {
         id: "products",
@@ -312,6 +319,7 @@ const adminNavItems: NavItem[] = [
     label: "SEO Settings",
     icon: Search,
     description: "SEO tools & optimization",
+    module: "seo",
     children: [
       {
         id: "analytics-settings",
@@ -386,6 +394,7 @@ export function Sidebar({ userRole }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { state, isMobile, setOpenMobile } = useSidebar();
+  const installedModules = useInstalledModules();
   const collapsed = state === "collapsed" && !isMobile;
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
@@ -496,14 +505,15 @@ export function Sidebar({ userRole }: SidebarProps) {
     }
   };
 
-  const shouldRenderItem = (item: NavItem) => {
-    if (isSubscriber) return true;
-    // Module-toggle gating (from Site Settings → Modules section)
-    // if (item.id === "ecommerce" && !moduleFlags.ecommerceEnabled) return false;
-    if (item.modulePermission)
-      return visibleModules[item.modulePermission] === true;
-    return true;
-  };
+const shouldRenderItem = (item: NavItem) => {
+  if (item.module && installedModules && !installedModules.includes(item.module)) {
+    return false;
+  }
+  if (isSubscriber) return true;  
+  if (item.modulePermission)
+    return visibleModules[item.modulePermission] === true;
+  return true;
+};
 
   const isItemActive = (item: NavItem): boolean => {
     if (!item.href) return false;

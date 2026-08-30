@@ -104,21 +104,26 @@ export async function exportAll() {
     collectionName: collection?.name ?? null,
   }));
 
-  const plans = await prisma.plan.findMany({
-    where: { tenantId },
-    include: { features: { orderBy: { sortOrder: "asc" } } },
-    orderBy: { sortOrder: "asc" },
-  });
-  payload.plans = plans.map(({ features, ...plan }) => ({
-    ...stripRecord(plan),
-    features: features.map(({ id, planId, ...feature }) => feature),
-  }));
-  payload.planSettings = await prisma.planSettings.findUnique({
-    where: { tenantId },
-    select: { defaultTrialDays: true },
-  });
-
-  payload.subscribers = await exportSubscribers(tenantId);
+  if (prisma.plan) {
+    const plans = await prisma.plan.findMany({
+      where: { tenantId },
+      include: { features: { orderBy: { sortOrder: "asc" } } },
+      orderBy: { sortOrder: "asc" },
+    });
+    payload.plans = plans.map(({ features, ...plan }) => ({
+      ...stripRecord(plan),
+      features: features.map(({ id, planId, ...feature }) => feature),
+    }));
+    payload.planSettings = await prisma.planSettings.findUnique({
+      where: { tenantId },
+      select: { defaultTrialDays: true },
+    });
+    payload.subscribers = await exportSubscribers(tenantId);
+  } else {
+    payload.plans = [];
+    payload.planSettings = null;
+    payload.subscribers = [];
+  }
 
   return payload;
 }
@@ -168,6 +173,8 @@ async function exportSettings(tenantId) {
 }
 
 async function exportSubscribers(tenantId) {
+  if (!prisma.planSubscription || !prisma.planEnrollment) return [];
+
   const users = await prisma.user.findMany({
     where: { tenantId, role: { not: "SUPER_ADMIN" } },
     select: {
@@ -291,17 +298,23 @@ export async function importAll(payload, strategy = "skip") {
       tenantId,
       collectionMap,
     );
-  if (payload.plans?.length)
+  if (payload.plans?.length && prisma.plan)
     await importPlans(payload.plans, strategy, report.plans, tenantId);
-  if (payload.planSettings)
+  else if (payload.plans?.length)
+    report.plans.skipped += payload.plans.length;
+  if (payload.planSettings && prisma.planSettings)
     await importPlanSettings(payload.planSettings, report.settings, tenantId);
-  if (payload.subscribers?.length)
+  else if (payload.planSettings)
+    report.settings.skipped++;
+  if (payload.subscribers?.length && prisma.planSubscription)
     await importSubscribers(
       payload.subscribers,
       strategy,
       report.subscribers,
       tenantId,
     );
+  else if (payload.subscribers?.length)
+    report.subscribers.skipped += payload.subscribers.length;
 
   if (payload.pages?.length) {
     await importPages(payload.pages, strategy, report.pages, tenantId);
@@ -510,6 +523,11 @@ async function findTaxonomyIds(type, slugs = [], tenantId) {
 }
 
 async function importPlans(plans, strategy, report, tenantId) {
+  if (!prisma.plan) {
+    report.skipped += plans.length;
+    return;
+  }
+
   for (const plan of plans) {
     try {
       const existing = await prisma.plan.findFirst({
@@ -561,6 +579,11 @@ async function importPlans(plans, strategy, report, tenantId) {
 }
 
 async function importPlanSettings(settings, report, tenantId) {
+  if (!prisma.planSettings) {
+    report.skipped++;
+    return;
+  }
+
   try {
     await prisma.planSettings.upsert({
       where: { tenantId },
@@ -574,6 +597,11 @@ async function importPlanSettings(settings, report, tenantId) {
 }
 
 async function importSubscribers(subscribers, strategy, report, tenantId) {
+  if (!prisma.plan || !prisma.planSubscription || !prisma.planEnrollment) {
+    report.skipped += subscribers.length;
+    return;
+  }
+
   for (const subscriber of subscribers) {
     try {
       const user = await prisma.user.findFirst({
