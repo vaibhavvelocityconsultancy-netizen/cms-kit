@@ -79,6 +79,8 @@ model tenant {
     shippingZones        ShippingZone[]
     taxClasses           TaxClass[]
     ecommerceSettings    EcommerceSettings?
+    plans                Plan[]
+    planSettings         PlanSettings?
 }
 
 model user {
@@ -101,6 +103,10 @@ model user {
     customerAddresses CustomerAddress[]
     orders            Order[]
     carts             Cart[]
+    payments          Payment[]
+    subscriptions     Subscription[]
+    planSubscriptions PlanSubscription[]
+    planEnrollments   PlanEnrollment[]
 }
 
 model permission {
