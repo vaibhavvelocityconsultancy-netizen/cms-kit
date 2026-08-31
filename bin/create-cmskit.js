@@ -69,10 +69,120 @@ function stripUnknownRelations(schemaText) {
   );
 }
 
+
+function generateReadme(target, modules) {
+  const readmePath = path.join(target, "README.md");
+
+  const coreModules = ["pages", "posts", "media"];
+  const optionalModules = ["forms", "menus", "seo", "ecommerce", "billing"];
+
+  const coreNames = {
+    pages: "Pages",
+    posts: "Posts",
+    media: "Media",
+  };
+
+  const optionalNames = {
+    forms: "Forms",
+    menus: "Menus",
+    seo: "SEO",
+    ecommerce: "E-commerce",
+    billing: "Billing",
+  };
+
+  const installedCore = coreModules
+    .filter((mod) => modules.includes(mod))
+    .map((mod) => `- ${coreNames[mod]}`)
+    .join("\n");
+
+  const installedOptional = optionalModules
+    .filter((mod) => modules.includes(mod))
+    .map((mod) => `- ${optionalNames[mod]}`)
+    .join("\n");
+
+  const optionalSection =
+    installedOptional || "No optional modules installed.";
+
+  const content = `# CMSKit Project
+
+<!-- CMSKIT:START -->
+
+## CMSKit
+
+Version: 1.0.0
+
+## Installed Modules
+
+### Core
+
+${installedCore}
+
+### Optional
+
+${optionalSection}
+
+## Available Modules
+
+### Forms
+
+\`\`\`bash
+cmskit add forms
+\`\`\`
+
+### Menus
+
+\`\`\`bash
+cmskit add menus
+\`\`\`
+
+### SEO
+
+\`\`\`bash
+cmskit add seo
+\`\`\`
+
+### Ecommerce
+
+\`\`\`bash
+cmskit add ecommerce
+\`\`\`
+
+### Billing
+
+\`\`\`bash
+cmskit add billing
+\`\`\`
+
+## CMSKit Commands
+
+\`\`\`bash
+cmskit add <module>
+cmskit update
+cmskit --version
+\`\`\`
+
+<!-- CMSKIT:END -->
+
+## Project Documentation
+
+Add your project-specific documentation here.
+`;
+
+  fs.writeFileSync(readmePath, content, "utf8");
+}
+
 async function mergePrismaSchemas(target, modules) {
   const prismaDir = path.join(target, "prisma");
+  const cacheDir = path.join(target, ".cmskit-modules", "prisma");
+  fsExtra.ensureDirSync(cacheDir);
   const readSchema = (file) =>
     fs.readFileSync(path.join(prismaDir, file), "utf8");
+
+  // Always cache the pristine core (needed later to rebuild schema.prisma from scratch)
+  fs.copyFileSync(
+    path.join(prismaDir, "schema.core.prisma"),
+    path.join(cacheDir, "schema.core.prisma"),
+  );
 
   let finalSchema = readSchema("schema.core.prisma");
 
@@ -81,29 +191,28 @@ async function mergePrismaSchemas(target, modules) {
     const modPath = path.join(prismaDir, modFile);
     if (fs.existsSync(modPath)) {
       finalSchema += "\n\n" + readSchema(modFile);
+      fs.copyFileSync(modPath, path.join(cacheDir, modFile)); // cache even installed ones
     }
   }
 
-  finalSchema = stripUnknownRelations(finalSchema);
-
-  for (const file of [
-    "schema.core.prisma",
-    "schema.pages.prisma",
-    "schema.posts.prisma",
-    "schema.media.prisma",
-    "schema.forms.prisma",
-    "schema.menus.prisma",
-    "schema.ecommerce.prisma",
-    "schema.seo.prisma",
-    "schema.billing.prisma",
-  ]) {
-    const p = path.join(prismaDir, file);
-    if (fs.existsSync(p)) fs.unlinkSync(p);
+  // Cache fragments for modules NOT selected too (they still exist in prismaDir at this point)
+  const allFragmentFiles = fs
+    .readdirSync(prismaDir)
+    .filter((f) => f.startsWith("schema.") && f !== "schema.prisma");
+  for (const file of allFragmentFiles) {
+    fs.copyFileSync(path.join(prismaDir, file), path.join(cacheDir, file));
+    fs.unlinkSync(path.join(prismaDir, file));
   }
 
+  finalSchema = stripUnknownRelations(finalSchema);
   await writeFile(path.join(prismaDir, "schema.prisma"), finalSchema, "utf8");
-}
 
+  // Save selected modules list for cmskit add to read later
+  fs.writeFileSync(
+    path.join(target, "cmskit.installed-modules.json"),
+    JSON.stringify(modules, null, 2),
+  );
+}
 async function ensureDatabaseExists({ host, port, user, password, database }) {
   const connection = await mysql.createConnection({
     host,
@@ -116,11 +225,18 @@ async function ensureDatabaseExists({ host, port, user, password, database }) {
 }
 
 const MODULE_FOLDERS = {
-  pages: [
-    "src/app/admin/pages",
-    "src/app/api/pages",
-    "src/app/lib/services/pages",
-    "src/components/admin/pages",
+  forms: [
+    "src/app/admin/forms",
+    "src/app/api/form",
+    "src/app/lib/services/forms",
+    "src/components/admin/form",
+  ],
+  menus: ["src/app/admin/menus", "src/app/api/menus"],
+  media: [
+    "src/app/admin/media",
+    "src/app/api/media",
+    "src/app/lib/services/media",
+    "src/components/media-manager",
   ],
   posts: [
     "src/app/admin/posts",
@@ -138,19 +254,38 @@ const MODULE_FOLDERS = {
     "src/app/api/comments",
     "src/components/admin/comments",
   ],
-  media: [
-    "src/app/admin/media",
-    "src/app/api/media",
-    "src/app/lib/services/media",
-    "src/components/media-manager",
+  pages: [
+    "src/app/admin/pages",
+    "src/app/api/pages",
+    "src/app/lib/services/pages",
+    "src/components/admin/pages",
   ],
-  forms: [
-    "src/app/admin/forms",
-    "src/app/api/form",
-    "src/app/lib/services/forms",
-    "src/components/admin/form",
+  ecommerce: [
+    "src/app/admin/ecommerce",
+    "src/app/api/ecommerce",
+    "src/app/api/public/ecommerce",
+    "src/app/lib/services/ecommerce",
+    "src/components/admin/ecommerce",
+    "src/app/(public)/account/orders",
   ],
-  menus: ["src/app/admin/menus", "src/app/api/menus"],
+  seo: [
+    "src/app/admin/seo",
+    "src/app/admin/SeoSettingsSection.tsx",
+    "src/app/api/seo",
+    "src/app/api/redirects",
+    "src/app/api/analytics",
+    "src/app/api/internal-link-rules",
+    "src/app/api/ai-crawl-content",
+    "src/app/api/llms-txt",
+    "src/app/llms",
+    "src/app/robots.txt",
+    "src/app/sitemap.xml",
+    "src/app/sitemap.xsl",
+    "src/components/admin/seo/sitemap.tsx",
+    "src/components/admin/seo/RedirectManager.tsx",
+    "src/components/admin/seo/RuleFormDialog.tsx",
+    "src/components/SeoEditorPage.tsx",
+  ],
   billing: [
     "src/app/admin/plan-management",
     "src/app/admin/subscription",
@@ -160,7 +295,6 @@ const MODULE_FOLDERS = {
     "src/app/api/subscription",
     "src/app/api/subscription-user",
     "src/app/subscription",
-    "src/app/lib/services/subscription",
     "src/components/admin/plans",
     "src/components/subscription",
     "src/hooks/use-subscription.ts",
@@ -260,23 +394,35 @@ async function main() {
 
   const template = fileURLToPath(new URL("../template", import.meta.url));
 
+  // Copy everything (nothing skipped except node_modules/.next/.git/migrations/schema.prisma)
   await copy(template, target, {
     filter: (src) => {
       const normalized = src.replaceAll("\\", "/");
-      if (
-        normalized.includes("/node_modules/") ||
-        normalized.includes("/.next/") ||
-        normalized.includes("/.git/") ||
-        normalized.includes("/prisma/migrations/") ||
-        normalized.endsWith("/prisma/schema.prisma")
-      ) {
-        return false;
-      }
-      if (normalized.includes("/src/app/lib/payments/")) return true;
-      if (isExcludedModuleFolder(normalized, modules)) return false;
-      return true;
+      return (
+        !normalized.includes("/node_modules/") &&
+        !normalized.includes("/.next/") &&
+        !normalized.includes("/.git/") &&
+        !normalized.includes("/prisma/migrations/") &&
+        !normalized.endsWith("/prisma/schema.prisma")
+      );
     },
   });
+
+  // Stash unselected modules' files into a cache, so they can be added later
+  function stashUnselectedModules(target, selectedModules) {
+    for (const [mod, folders] of Object.entries(MODULE_FOLDERS)) {
+      if (selectedModules.includes(mod)) continue;
+      for (const folder of folders) {
+        const src = path.join(target, folder);
+        const dest = path.join(target, ".cmskit-modules", mod, folder);
+        if (fs.existsSync(src)) {
+          fsExtra.ensureDirSync(path.dirname(dest));
+          fsExtra.moveSync(src, dest, { overwrite: true });
+        }
+      }
+    }
+  }
+  stashUnselectedModules(target, modules);
 
   const dbUrl = `mysql://${encodeURIComponent(dbUser)}:${encodeURIComponent(dbPassword)}@${dbHost}:${dbPort}/${dbName}`;
 
@@ -289,7 +435,7 @@ const env = [
   ...(paymentGateways.includes("razorpay") ? ["RAZORPAY_KEY_ID=", "RAZORPAY_KEY_SECRET="] : []),
   ...(paymentGateways.includes("paypal") ? ["NEXT_PUBLIC_PAYPAL_CLIENT_ID=", "PAYPAL_CLIENT_SECRET=", "PAYPAL_MODE=sandbox"] : []),
   "",
-].join("\\n"); 
+].join("\n"); 
 
   await writeFile(path.join(target, ".env"), env, "utf8");
 
@@ -298,6 +444,7 @@ const env = [
     JSON.stringify(
       {
         version: 1,
+        cmskitVersion: "1.0.0",
         database,
         modules,
         paymentGateways,
@@ -314,7 +461,9 @@ const env = [
   console.log("✔ Prisma schema generated for selected modules");
   console.log("✔ .env created");
   console.log(`✔ Modules selected: ${modules.join(", ")}`);
+  generateReadme(target, modules);
   console.log("✔ CMSKit configuration created");
+  console.log("✔ README.md generated");
 
   console.log("\nInstalling dependencies (this may take a minute)...\n");
   execSync("npm install", { cwd: target, stdio: "inherit" });

@@ -4,7 +4,8 @@
   "description": "Create a CMSKit project",
   "type": "module",
   "bin": {
-    "create-cmskit": "bin/create-cmskit.js"
+    "create-cmskit": "bin/create-cmskit.js",
+    "cmskit": "bin/cmskit.js"
   },
   "files": [
     "bin",

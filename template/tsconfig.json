@@ -38,7 +38,7 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "app/api/menus/location/[location]"
-  ],
+, "../bin/cmskit.js"  ],
   "exclude": [
     "node_modules"
   ]
