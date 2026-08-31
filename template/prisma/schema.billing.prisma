@@ -24,9 +24,10 @@ model Payment {
     courseId             Int?
     planId               Int?
     billingCycle         BillingCycle  @default(LIFETIME)
-    paypalOrderId        String?       @unique
-    paypalCaptureId      String?       @unique
-    paypalSubscriptionId String?
+    provider             String
+    providerOrderId      String?       @unique
+    providerPaymentId    String?       @unique
+    providerSubscriptionId String?     @unique
     amount               Int
     currency             String        @default("INR")
     status               PaymentStatus @default(PENDING)

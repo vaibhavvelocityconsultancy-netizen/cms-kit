@@ -22,6 +22,7 @@ enum OrderPaymentStatus {
 
 enum PaymentMethod {
     STRIPE
+    RAZORPAY
     COD
     PAYPAL
 }

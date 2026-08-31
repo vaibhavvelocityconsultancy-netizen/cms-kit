@@ -15,6 +15,12 @@ const cliProjectName = args[0];
 
 const DEFAULT_MODULES = ["pages", "posts", "media"];
 
+const PAYMENT_GATEWAYS = [
+  { name: "Stripe", value: "stripe" },
+  { name: "Razorpay", value: "razorpay" },
+  { name: "PayPal", value: "paypal" },
+];
+
 const MODULES = [
   { name: "Forms", value: "forms" },
   { name: "Menus", value: "menus" },
@@ -216,6 +222,9 @@ async function main() {
   });
 
   const modules = [...DEFAULT_MODULES, ...optionalModules];
+  const paymentGateways = optionalModules.includes("billing") || optionalModules.includes("ecommerce")
+    ? await checkbox({ message: "Select payment gateways:", choices: PAYMENT_GATEWAYS })
+    : [];
 
   const sampleContent = await confirm({
     message: "Create default Home and Posts pages?",
@@ -263,6 +272,7 @@ async function main() {
       ) {
         return false;
       }
+      if (normalized.includes("/src/app/lib/payments/")) return true;
       if (isExcludedModuleFolder(normalized, modules)) return false;
       return true;
     },
@@ -275,8 +285,11 @@ const env = [
   `DATABASE_URL="${dbUrl}"`,
   `NEXT_PUBLIC_APP_URL="http://localhost:3000"`,
   `NEXT_PUBLIC_SITE_URL="http://localhost:3000"`,
+  ...(paymentGateways.includes("stripe") ? ["STRIPE_SECRET_KEY=", "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=", "STRIPE_WEBHOOK_SECRET="] : []),
+  ...(paymentGateways.includes("razorpay") ? ["RAZORPAY_KEY_ID=", "RAZORPAY_KEY_SECRET="] : []),
+  ...(paymentGateways.includes("paypal") ? ["NEXT_PUBLIC_PAYPAL_CLIENT_ID=", "PAYPAL_CLIENT_SECRET=", "PAYPAL_MODE=sandbox"] : []),
   "",
-].join("\n"); 
+].join("\\n"); 
 
   await writeFile(path.join(target, ".env"), env, "utf8");
 
@@ -287,6 +300,7 @@ const env = [
         version: 1,
         database,
         modules,
+        paymentGateways,
         sampleContent,
       },
       null,
