@@ -14,7 +14,7 @@ export async function getDashboardData() {
     postStatusCounts,
     categoriesCount,
     tagsCount,
-    menusCount,
+    // menusCount,
     recentPages,
     recentPosts,
   ] = await prisma.$transaction([
@@ -30,7 +30,7 @@ export async function getDashboardData() {
 
     prisma.tag.count({ where: { tenantId } }),
 
-    prisma.menu.count({ where: { tenantId } }),
+    // prisma.menu.count({ where: { tenantId } }),
 
     prisma.page.findMany({
       where: { tenantId },
@@ -58,6 +58,10 @@ export async function getDashboardData() {
       },
     }),
   ]);
+
+  const menusCount = prisma.menu
+    ? await prisma.menu.count({ where: { tenantId } })
+    : 0;
 
   const postCountsByStatus = Object.fromEntries(
     postStatusCounts.map((count) => [count.status, count._count._all]),

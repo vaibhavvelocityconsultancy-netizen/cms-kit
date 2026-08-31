@@ -101,6 +101,11 @@ model user {
     customerAddresses CustomerAddress[]
     orders            Order[]
     carts             Cart[]
+    payments          Payment[]
+    subscriptions     Subscription[]
+    planSubscriptions PlanSubscription[]
+    planEnrollments   PlanEnrollment[]
+
 }
 
 model permission {

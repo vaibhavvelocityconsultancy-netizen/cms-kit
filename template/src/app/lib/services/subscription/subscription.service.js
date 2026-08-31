@@ -322,18 +322,30 @@ export async function updatePlan(id, tenantId, input) {
   return ensurePaypalPlanIds(updatedPlan, existingPlan);
 }
 
-export async function recordPendingSubscription(userId, planId, billingCycle, paypalSubscriptionId) {
+export async function recordPendingSubscription(
+  userId,
+  planId,
+  billingCycle,
+  paypalSubscriptionId,
+) {
   const plan = await prisma.plan.findUnique({ where: { id: Number(planId) } });
   if (!plan) throw new ApiError(404, "Plan not found");
 
   const paypalPlanId =
-    billingCycle === "MONTHLY" ? plan.paypalMonthlyPlanId : plan.paypalYearlyPlanId;
+    billingCycle === "MONTHLY"
+      ? plan.paypalMonthlyPlanId
+      : plan.paypalYearlyPlanId;
   if (!paypalPlanId) {
-    throw new ApiError(500, `No PayPal plan configured for ${plan.title} (${billingCycle})`);
+    throw new ApiError(
+      500,
+      `No PayPal plan configured for ${plan.title} (${billingCycle})`,
+    );
   }
 
   const existing = await prisma.planSubscription.findUnique({
-    where: { userId_planId: { userId: Number(userId), planId: Number(planId) } },
+    where: {
+      userId_planId: { userId: Number(userId), planId: Number(planId) },
+    },
   });
 
   if (existing) {
@@ -473,6 +485,8 @@ export async function updatePlanOrder(tenantId, plans) {
 }
 
 export async function getUserCurrentAccess(userId) {
+  if (!prisma.planSubscription) return { type: "none", record: null }; // Billing module not installed
+
   const [subscription, enrollment] = await Promise.all([
     prisma.planSubscription.findFirst({
       where: { userId: Number(userId) },

@@ -1,16 +1,14 @@
-// new design page
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/src/lib/query-key";
 import { fetchers } from "@/src/lib/fetchers";
 import { useCurrentUser } from "@/src/hooks/use-current-user";
 import { appUrl } from "@/src/lib/base-path";
 import { getBaseUrl } from "@/src/lib/config";
-import { useCart } from "@/src/lib/storefront/cart";
 
 type SiteSettings = {
   logo?: string;
@@ -36,6 +34,14 @@ type HeaderMenu = {
 type SiteNavbarProps = {
   settings?: SiteSettings;
   headerMenu?: HeaderMenu;
+};
+
+type SearchResult = {
+  id: string;
+  type: string;
+  slug: string;
+  title: string;
+  excerpt?: string;
 };
 
 function getMenuItems(menu?: HeaderMenu): MenuItem[] {
@@ -91,68 +97,24 @@ function isActivePage(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
   const pathname = usePathname();
   const { user } = useCurrentUser();
-  const { count: cartCount } = useCart();
 
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState("");
-  const [searchResults, setSearchResults] = useState([]); // ← ADD
-  const [isSearching, setIsSearching] = useState(false); // ← ADD
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
+  const [searchValue, setSearchValue] = useState<string>("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
   const [openMobileSubmenus, setOpenMobileSubmenus] = useState<Set<string>>(
     new Set(),
   );
 
-  function highlightMatch(text, query) {
-    if (!text || !query) return text;
-
-    const parts = text.split(new RegExp(`(${escapeRegex(query)})`, "gi"));
-
-    return parts.map((part, i) =>
-      part.toLowerCase() === query.toLowerCase() ? (
-        <mark key={i} className="bg-yellow-200 text-inherit rounded-sm px-0.5">
-          {part}
-        </mark>
-      ) : (
-        part
-      ),
-    );
-  }
-
-  function escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  }
-
-  useEffect(() => {
-    const query = searchValue.trim();
-
-    if (query.length < 2) {
-      setSearchResults([]);
-      return;
-    }
-
-    setIsSearching(true);
-
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `${getBaseUrl()}/api/search?q=${encodeURIComponent(query)}`,
-        );
-        const json = await res.json();
-        setSearchResults(json.data ?? []);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchValue]);
-
-  const queryClient = useQueryClient(); // ← add this
+  const queryClient = useQueryClient();
 
   const prefetchPage = (item: MenuItem) => {
     if (item.type !== "page" || !item.slug) return;
@@ -192,13 +154,6 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
           url: "/categories/new-arrivals",
           children: [],
         },
-        {
-          id: "cart-static",
-          label: "Cart",
-          type: "custom",
-          url: "/cart",
-          children: [],
-        },
       ];
     }
 
@@ -215,7 +170,7 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
   }, [menuItems]);
 
   const logo = settings?.logo;
-  const siteName = settings?.siteName || "iPDAV";
+  const siteName = settings?.siteName || "Store";
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -250,6 +205,52 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
     };
   }, []);
 
+  useEffect(() => {
+    const query = searchValue.trim();
+
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${getBaseUrl()}/api/search?q=${encodeURIComponent(query)}`,
+        );
+        const json = await res.json();
+        setSearchResults(json.data ?? []);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  const highlightMatch = (text: string, query: string): ReactNode => {
+    if (!text || !query) return text;
+
+    const parts = text.split(new RegExp(`(${escapeRegex(query)})`, "gi"));
+
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase() ? (
+        <mark
+          key={i}
+          className="rounded-sm bg-[#1F6F54]/15 px-0.5 text-[#1F6F54]"
+        >
+          {part}
+        </mark>
+      ) : (
+        part
+      ),
+    );
+  };
+
   const handleSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -282,26 +283,34 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
     });
   };
 
-  const renderDesktopMenuItems = (items: MenuItem[]): React.ReactNode =>
+  const renderDesktopMenuItems = (items: MenuItem[]): ReactNode =>
     items.map((item) => {
       const href = getMenuItemHref(item);
       const hasChildren = Boolean(item.children?.length);
       const active = isActivePage(pathname, href);
 
       return (
-        <div key={item.id} className="group relative nav-item">
-          <Link href={href} aria-current={active ? "page" : undefined}>
+        <div key={item.id} className="group relative">
+          <Link
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={`inline-flex items-center gap-1 border-b-2 py-2 text-sm font-medium transition-colors ${
+              active
+                ? "border-[#1F6F54] text-[#14181F]"
+                : "border-transparent text-[#4B5563] hover:text-[#14181F]"
+            }`}
+          >
             {item.label}
 
             {hasChildren ? (
-              <span className="ml-1 text-xs opacity-70" aria-hidden="true">
+              <span className="text-xs opacity-60" aria-hidden="true">
                 ▾
               </span>
             ) : null}
           </Link>
 
           {hasChildren ? (
-            <div className="invisible absolute left-0 top-full z-50 min-w-56 translate-y-2 border border-white/10 bg-[#0f1b2b] py-2 opacity-0 shadow-2xl transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+            <div className="invisible absolute left-0 top-full z-50 mt-2 min-w-56 -translate-y-1 rounded-md border border-[#E5E7EB] bg-white py-2 opacity-0 shadow-sm transition-all duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
               {item.children?.map((child) => {
                 const childHref = getMenuItemHref(child);
                 const childActive = isActivePage(pathname, childHref);
@@ -311,8 +320,12 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
                     key={child.id}
                     href={childHref}
                     aria-current={childActive ? "page" : undefined}
-                    className="block whitespace-nowrap px-5 py-2.5 text-[15px] text-white hover:bg-white/10"
-                    onMouseEnter={() => prefetchPage(child)} // ← add this
+                    className={`block whitespace-nowrap px-4 py-2 text-sm ${
+                      childActive
+                        ? "bg-[#F3F4F6] text-[#14181F]"
+                        : "text-[#4B5563] hover:bg-[#F3F4F6] hover:text-[#14181F]"
+                    }`}
+                    onMouseEnter={() => prefetchPage(child)}
                   >
                     {child.label}
                   </Link>
@@ -324,10 +337,7 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
       );
     });
 
-  const renderMobileMenuItems = (
-    items: MenuItem[],
-    level = 0,
-  ): React.ReactNode =>
+  const renderMobileMenuItems = (items: MenuItem[]): ReactNode =>
     items.map((item) => {
       const href = getMenuItemHref(item);
       const hasChildren = Boolean(item.children?.length);
@@ -335,19 +345,19 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
       const active = isActivePage(pathname, href);
 
       return (
-        <div
-          key={item.id}
-          className="nav-items border-b border-black/5 last:border-b-0"
-        >
+        <div key={item.id} className="border-b border-[#F3F4F6] last:border-b-0">
           <div className="flex items-center">
             <Link
               href={href}
               aria-current={active ? "page" : undefined}
-              onMouseEnter={() => prefetchPage(item)} // ← add this
+              onMouseEnter={() => prefetchPage(item)}
+              className={`flex flex-1 items-center gap-1 py-4 text-[15px] font-medium ${
+                active ? "text-[#14181F]" : "text-[#374151]"
+              }`}
             >
               {item.label}
               {hasChildren ? (
-                <span className="ml-1 text-xs opacity-70" aria-hidden="true">
+                <span className="text-xs opacity-60" aria-hidden="true">
                   ▾
                 </span>
               ) : null}
@@ -356,7 +366,7 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
             {hasChildren ? (
               <button
                 type="button"
-                className="flex h-12 w-12 items-center justify-center text-[#152539]"
+                className="flex h-12 w-12 items-center justify-center text-[#4B5563]"
                 aria-label={`${isOpen ? "Close" : "Open"} ${item.label} submenu`}
                 aria-expanded={isOpen}
                 onClick={() => toggleMobileSubmenu(item.id)}
@@ -382,8 +392,8 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
           </div>
 
           {hasChildren && isOpen ? (
-            <div className="border-t border-black/5 bg-black/[0.025]">
-              {renderMobileMenuItems(item.children || [], level + 1)}
+            <div className="border-t border-[#F3F4F6] bg-[#FAFAFA] pl-4">
+              {renderMobileMenuItems(item.children || [])}
             </div>
           ) : null}
         </div>
@@ -392,70 +402,112 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
 
   return (
     <>
-      <header id="site-navbar" className="site-header bg-navy txt-white">
-        <div className="site-container">
-          <div className="topbar relative flex items-center justify-between">
-            <Link href="/" className="brand" aria-label={`${siteName} home`}>
+      <header
+        id="site-navbar"
+        className="sticky top-0 z-50 border-b border-[#E5E7EB] bg-white"
+      >
+        <div className="mx-auto max-w-7xl px-6">
+          <div className="relative flex h-16 items-center justify-between gap-6">
+            <Link
+              href="/"
+              className="shrink-0"
+              aria-label={`${siteName} home`}
+            >
               {logo ? (
-                <img src={logo} alt={siteName} width="450" height="64" />
+                <img src={logo} alt={siteName} width="140" height="32" className="h-8 w-auto object-contain" />
               ) : (
-                <span className="text-2xl font-semibold text-[#152539]">
+                <span className="text-lg font-semibold tracking-tight text-[#14181F]">
                   {siteName}
                 </span>
               )}
             </Link>
 
-            <div className="top-actions flex items-center">
+            <nav
+              className="hidden flex-1 items-center gap-8 lg:flex"
+              aria-label="Primary navigation"
+            >
+              {finalMenuItems.length > 0 ? (
+                renderDesktopMenuItems(finalMenuItems)
+              ) : (
+                <p className="text-sm text-[#6B7280]">
+                  No items have been added to the selected header menu.
+                </p>
+              )}
+            </nav>
+
+            <div className="flex shrink-0 items-center gap-4">
               {!user ? (
                 <>
-                  <Link className="login-link" href="/login">
+                  <Link
+                    className="hidden text-sm font-medium text-[#4B5563] hover:text-[#14181F] sm:inline-block"
+                    href="/login"
+                  >
                     Log In
                   </Link>
 
-                  <Link className="signup-link" href="/register">
+                  <Link
+                    className="hidden rounded-full bg-[#1F6F54] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#195C46] sm:inline-block"
+                    href="/register"
+                  >
                     Sign Up
                   </Link>
                 </>
               ) : (
-                <Link className="signup-link" href={dashboardUrl}>
+                <Link
+                  className="hidden rounded-full bg-[#1F6F54] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#195C46] sm:inline-block"
+                  href={dashboardUrl}
+                >
                   Dashboard
                 </Link>
               )}
 
-              <span className="top-separator" aria-hidden="true" />
+              <span
+                className="hidden h-5 w-px bg-[#E5E7EB] sm:block"
+                aria-hidden="true"
+              />
 
               <button
                 type="button"
-                className="search-button"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-[#4B5563] transition-colors hover:bg-[#F3F4F6] hover:text-[#14181F]"
                 aria-label="Open search"
                 aria-expanded={isSearchOpen}
                 onClick={() => setIsSearchOpen((current) => !current)}
               >
-                <span />
+                <svg
+                  className="h-[18px] w-[18px]"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="m21 21-4.34-4.34M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z"
+                  />
+                </svg>
               </button>
-              <Link className="login-link" href="/cart">
-                Cart{cartCount > 0 ? ` (${cartCount})` : ""}
-              </Link>
             </div>
 
             <button
               type="button"
-              className="mobile-menu-button"
+              className="flex h-9 w-9 flex-col items-center justify-center gap-1.5 lg:hidden"
               aria-label="Open navigation menu"
               aria-expanded={isMobileMenuOpen}
               aria-controls="mobile-navigation"
               onClick={() => setIsMobileMenuOpen(true)}
             >
-              <span />
-              <span />
-              <span />
+              <span className="h-0.5 w-5 rounded-full bg-[#14181F]" />
+              <span className="h-0.5 w-5 rounded-full bg-[#14181F]" />
+              <span className="h-0.5 w-5 rounded-full bg-[#14181F]" />
             </button>
 
             {isSearchOpen ? (
               <div className="absolute right-0 top-[calc(100%+12px)] z-[70] hidden w-[360px] md:block">
                 <form
-                  onSubmit={(e) => e.preventDefault()} // ← no more navigation
-                  className="flex overflow-hidden rounded-md border border-black/10 bg-white shadow-xl"
+                  onSubmit={handleSearchSubmit}
+                  className="flex overflow-hidden rounded-lg border border-[#E5E7EB] bg-white shadow-sm"
                 >
                   <label className="sr-only" htmlFor="desktop-site-search">
                     Search
@@ -467,51 +519,49 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
                     value={searchValue}
                     onChange={(event) => setSearchValue(event.target.value)}
                     placeholder="Search..."
-                    className="min-w-0 flex-1 px-4 py-3 text-sm text-[#152539] outline-none"
+                    className="min-w-0 flex-1 px-4 py-3 text-sm text-[#14181F] outline-none placeholder:text-[#9CA3AF]"
                     autoFocus
                   />
                 </form>
 
                 {searchValue.trim().length >= 2 && (
-                  <div className="mt-1 max-h-80 overflow-y-auto rounded-md border border-black/10 bg-white shadow-xl">
+                  <div className="mt-1 max-h-80 overflow-y-auto rounded-lg border border-[#E5E7EB] bg-white shadow-sm">
                     {isSearching && (
-                      <div className="p-3 text-sm text-gray-500">
+                      <div className="p-3 text-sm text-[#6B7280]">
                         Searching...
                       </div>
                     )}
 
                     {!isSearching && searchResults.length === 0 && (
-                      <div className="p-3 text-sm text-gray-500">
+                      <div className="p-3 text-sm text-[#6B7280]">
                         No results found
                       </div>
                     )}
 
                     {!isSearching &&
-                      searchResults.map((r) => (
+                      searchResults.map((result: SearchResult) => (
                         <Link
-                          key={`${r.type}-${r.id}`}
+                          key={`${result.type}-${result.id}`}
                           href={
-                            r.type === "post"
-                              ? `/posts/${r.slug}`
-                              : `/${r.slug}`
+                            result.type === "post"
+                              ? `/posts/${result.slug}`
+                              : `/${result.slug}`
                           }
-                          className="block border-b border-black/5 p-3 last:border-0 hover:bg-gray-50"
+                          className="block border-b border-[#F3F4F6] p-3 last:border-0 hover:bg-[#FAFAFA]"
                           onClick={() => {
                             setIsSearchOpen(false);
                             setSearchValue("");
                           }}
                         >
-                          <span className="text-xs uppercase tracking-wide text-gray-400">
-                            {r.type}
+                          <span className="text-xs uppercase tracking-wide text-[#9CA3AF]">
+                            {result.type}
                           </span>
-                          <div className="text-sm font-medium text-[#152539]">
-                            {highlightMatch(r.title, searchValue.trim())}{" "}
-                            {/* ← CHANGED */}
+                          <div className="text-sm font-medium text-[#14181F]">
+                            {highlightMatch(result.title, searchValue.trim())}
                           </div>
-                          {r.excerpt && (
-                            <div className="mt-1 text-xs text-gray-500">
-                              {highlightMatch(r.excerpt, searchValue.trim())}{" "}
-                              {/* ← CHANGED */}
+                          {result.excerpt && (
+                            <div className="mt-1 text-xs text-[#6B7280]">
+                              {highlightMatch(result.excerpt, searchValue.trim())}
                             </div>
                           )}
                         </Link>
@@ -521,23 +571,12 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
               </div>
             ) : null}
           </div>
-
-          <nav className="main-nav" aria-label="Primary navigation">
-            <div className="nav-item-container hidden items-center justify-between lg:flex">
-              {finalMenuItems.length > 0 ? (
-                renderMobileMenuItems(finalMenuItems)
-              ) : (
-                <p className="py-6 text-sm text-[#152539]/70">
-                  No items have been added to the selected header menu.
-                </p>
-              )}{" "}
-            </div>
-          </nav>
         </div>
       </header>
 
+      {/* Mobile overlay */}
       <div
-        className={`fixed inset-0 z-[90] bg-black/55 transition-opacity duration-300 lg:hidden ${
+        className={`fixed inset-0 z-[90] bg-black/40 transition-opacity duration-300 lg:hidden ${
           isMobileMenuOpen
             ? "pointer-events-auto opacity-100"
             : "pointer-events-none opacity-0"
@@ -546,18 +585,19 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
         onClick={closeMobileMenu}
       />
 
+      {/* Mobile navigation */}
       <aside
         id="mobile-navigation"
-        className={`fixed inset-y-0 left-0 z-[100] flex w-[86%] max-w-[360px] flex-col bg-white shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-[100] flex w-[86%] max-w-[360px] flex-col bg-white shadow-xl transition-transform duration-300 ease-in-out lg:hidden ${
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-hidden={!isMobileMenuOpen}
         inert={!isMobileMenuOpen}
       >
-        <div className="flex min-h-[92px] items-center justify-between border-b border-black/5 bg-[#f7f7f7] px-6">
+        <div className="flex h-16 items-center justify-between border-b border-[#E5E7EB] px-6">
           <Link
             href="/"
-            className="block max-w-[190px]"
+            className="block max-w-[160px]"
             aria-label={`${siteName} home`}
             onClick={closeMobileMenu}
           >
@@ -565,12 +605,12 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
               <img
                 src={logo}
                 alt={siteName}
-                width="450"
-                height="64"
-                className="max-h-14 w-auto object-contain"
+                width="140"
+                height="32"
+                className="h-7 w-auto object-contain"
               />
             ) : (
-              <span className="text-xl font-semibold text-[#152539]">
+              <span className="text-lg font-semibold tracking-tight text-[#14181F]">
                 {siteName}
               </span>
             )}
@@ -578,12 +618,12 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
 
           <button
             type="button"
-            className="relative flex h-11 w-11 items-center justify-center text-[#152539]"
+            className="relative flex h-9 w-9 items-center justify-center text-[#4B5563] hover:text-[#14181F]"
             aria-label="Close navigation menu"
             onClick={closeMobileMenu}
           >
-            <span className="absolute h-0.5 w-6 rotate-45 bg-current" />
-            <span className="absolute h-0.5 w-6 -rotate-45 bg-current" />
+            <span className="absolute h-0.5 w-5 rotate-45 bg-current" />
+            <span className="absolute h-0.5 w-5 -rotate-45 bg-current" />
           </button>
         </div>
 
@@ -594,18 +634,18 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
           {menuItems.length > 0 ? (
             renderMobileMenuItems(menuItems)
           ) : (
-            <p className="py-6 text-sm text-[#152539]/70">
+            <p className="py-6 text-sm text-[#6B7280]">
               No items have been added to the selected header menu.
             </p>
           )}
         </nav>
 
-        <div className="border-t border-black/10 px-6 py-5">
+        <div className="border-t border-[#E5E7EB] px-6 py-5">
           {!user ? (
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-4">
               <Link
                 href="/login"
-                className="font-medium text-[#c00900]"
+                className="text-sm font-medium text-[#4B5563] hover:text-[#14181F]"
                 onClick={closeMobileMenu}
               >
                 Log In
@@ -613,7 +653,7 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
 
               <Link
                 href="/register"
-                className="font-medium text-[#15830b]"
+                className="rounded-full bg-[#1F6F54] px-4 py-2 text-sm font-medium text-white hover:bg-[#195C46]"
                 onClick={closeMobileMenu}
               >
                 Sign Up
@@ -622,7 +662,7 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
           ) : (
             <Link
               href={dashboardUrl}
-              className="font-medium text-[#152539]"
+              className="inline-block rounded-full bg-[#1F6F54] px-4 py-2 text-sm font-medium text-white hover:bg-[#195C46]"
               onClick={closeMobileMenu}
             >
               Dashboard
