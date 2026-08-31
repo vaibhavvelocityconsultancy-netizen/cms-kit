@@ -431,14 +431,28 @@ const env = [
   `DATABASE_URL="${dbUrl}"`,
   `NEXT_PUBLIC_APP_URL="http://localhost:3000"`,
   `NEXT_PUBLIC_SITE_URL="http://localhost:3000"`,
-  ...(paymentGateways.includes("stripe") ? ["STRIPE_SECRET_KEY=", "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=", "STRIPE_WEBHOOK_SECRET="] : []),
-  ...(paymentGateways.includes("razorpay") ? ["RAZORPAY_KEY_ID=", "RAZORPAY_KEY_SECRET="] : []),
-  ...(paymentGateways.includes("paypal") ? ["NEXT_PUBLIC_PAYPAL_CLIENT_ID=", "PAYPAL_CLIENT_SECRET=", "PAYPAL_MODE=sandbox"] : []),
+  ...(paymentGateways.includes("stripe")
+    ? [
+        "STRIPE_SECRET_KEY=",
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=",
+        "STRIPE_WEBHOOK_SECRET=",
+      ]
+    : []),
+  ...(paymentGateways.includes("razorpay")
+    ? ["RAZORPAY_KEY_ID=", "RAZORPAY_KEY_SECRET="]
+    : []),
+  ...(paymentGateways.includes("paypal")
+    ? [
+        "NEXT_PUBLIC_PAYPAL_CLIENT_ID=",
+        "PAYPAL_CLIENT_SECRET=",
+        "PAYPAL_MODE=sandbox",
+      ]
+    : []),
   "",
-].join("\n"); 
+].join("\n");
 
-  await writeFile(path.join(target, ".env"), env, "utf8");
-
+await fsExtra.ensureDir(target);
+await writeFile(path.join(target, ".env"), env, "utf8");
   await writeFile(
     path.join(target, "cmskit.config.json"),
     JSON.stringify(
