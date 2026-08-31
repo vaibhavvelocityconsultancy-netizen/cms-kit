@@ -215,22 +215,22 @@ const adminNavItems: NavItem[] = [
     href: "/admin/plan-management",
   },
 
-  {
-    id: "files-manager",
-    label: "User Management",
-    icon: Share2,
-    description: "Subscriber-info & uploaded files",
-    modulePermission: "subscriber_upload_files_info",
-    href: "/admin/files",
-  },
-  {
-    id: "files-category-manager",
-    label: "File Categories",
-    icon: FolderOpen,
-    description: "Manage file categories",
-    modulePermission: "subscriber_upload_files_info",
-    href: "/admin/files-category",
-  },
+  // {
+  //   id: "files-manager",
+  //   label: "User Management",
+  //   icon: Share2,
+  //   description: "Subscriber-info & uploaded files",
+  //   modulePermission: "subscriber_upload_files_info",
+  //   href: "/admin/files",
+  // },
+  // {
+  //   id: "files-category-manager",
+  //   label: "File Categories",
+  //   icon: FolderOpen,
+  //   description: "Manage file categories",
+  //   modulePermission: "subscriber_upload_files_info",
+  //   href: "/admin/files-category",
+  // },
   {
     id: "ecommerce",
     label: "E-commerce",
