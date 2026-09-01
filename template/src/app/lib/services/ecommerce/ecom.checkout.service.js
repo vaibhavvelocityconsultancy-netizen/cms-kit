@@ -1,10 +1,7 @@
 import { cookies } from "next/headers";
 import { requireAuth } from "../../withPermission.js";
 import { prisma } from "../../prisma.js";
-import {
-  createPayment,
-  capturePayment,
-} from "../common_urls/payment.service.js";
+import { getAdapter } from "../../payments/index.js";
 import { getCart, clearCart } from "./ecom.cart.service.js";
 import { createOrder } from "./ecom.orders.service.js";
 
@@ -19,7 +16,7 @@ async function checkoutContext() {
   };
 }
 
-export async function createEcommercePayment() {
+export async function createEcommercePayment(provider) {
   const context = await checkoutContext();
   const cart = await getCart(
     context.sessionId,
@@ -31,29 +28,35 @@ export async function createEcommercePayment() {
     where: { tenantId: context.tenantId },
   });
   const shippingCost = cart.subtotal >= 150 ? 0 : 12;
-  const payment = await createPayment({
-    userId: context.userId,
-    amount: cart.subtotal + shippingCost,
-    currency: settings?.currency ?? "USD",
-    paymentType: "PRODUCT",
-    referenceId: cart.id,
-  });
-  return { ...payment, cart, shippingCost };
+
+  const adapter = getAdapter(provider);
+  const payment = await adapter.createOrder(
+    cart.subtotal + shippingCost,
+    settings?.currency ?? "USD",
+    { userId: context.userId, cartId: cart.id },
+  );
+
+  return { ...payment, cart, shippingCost, provider };
 }
 
 export async function completeEcommercePayment(
-  paypalOrderId,
+  provider,
+  providerOrderId,
+  providerPaymentId,
   shippingAddress,
   billingAddress,
 ) {
   const context = await checkoutContext();
-  await capturePayment(paypalOrderId);
+  const adapter = getAdapter(provider);
+  await adapter.verifyPayment(providerOrderId, providerPaymentId);
+
   const cart = await getCart(
     context.sessionId,
     context.tenantId,
     context.userId,
   );
   if (!cart.items.length) throw new Error("Your cart is empty");
+
   const order = await createOrder({
     items: cart.items.map((item) => ({
       productId: item.productId,
@@ -62,14 +65,22 @@ export async function completeEcommercePayment(
     })),
     shippingAddress,
     billingAddress: billingAddress ?? shippingAddress,
-    paymentMethod: "PAYPAL",
+    paymentMethod: provider.toUpperCase(),
   });
+
   await prisma.order
     .update({
       where: { id: order.id },
-      data: { paymentStatus: "PAID", status: "PROCESSING", paypalOrderId },
+      data: {
+        paymentStatus: "PAID",
+        status: "PROCESSING",
+        provider: provider.toUpperCase(),
+        providerOrderId,
+        providerPaymentId,
+      },
     })
     .catch(() => {});
+
   await clearCart(context.sessionId, context.tenantId, context.userId);
   return order;
 }
