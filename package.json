@@ -1,6 +1,6 @@
 {
   "name": "create-cmskit",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Create a CMSKit project",
   "type": "module",
   "bin": {
