@@ -10,6 +10,7 @@ import SiteFooter from "./SiteFooter";
 
 import AnalyticsScripts from "./AnalyticsScripts";
 import { CartProvider } from "@/src/lib/storefront/cart";
+import { useInstalledModules } from "@/src/lib/useInstalledModules";
 
 const DEFAULT_FOOTER_SETTINGS = {
   footerLogo: "",
@@ -73,6 +74,7 @@ export default function SiteLayout({
     initialData: initialBootstrapData,
     staleTime: 60_000,
   });
+  const modules = useInstalledModules();
 
   const settings = useMemo(
     () => bootstrapData?.data?.settings,
@@ -212,7 +214,11 @@ export default function SiteLayout({
             }}
           />
         )}
-        <SiteNavbar settings={settings} headerMenu={headerMenu} />
+        <SiteNavbar
+          settings={settings}
+          headerMenu={headerMenu}
+          modules={modules ?? []}
+        />
 
         {children}
         <SiteFooter

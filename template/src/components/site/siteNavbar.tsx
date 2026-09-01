@@ -34,6 +34,8 @@ type HeaderMenu = {
 type SiteNavbarProps = {
   settings?: SiteSettings;
   headerMenu?: HeaderMenu;
+    modules?: string[];
+
 };
 
 type SearchResult = {
@@ -101,7 +103,7 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
+export default function SiteNavbar({ settings, headerMenu, modules = [] }: SiteNavbarProps) {
   const pathname = usePathname();
   const { user } = useCurrentUser();
 
@@ -137,37 +139,40 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
     [headerMenu],
   );
 
-  const finalMenuItems = useMemo(() => {
-    if (menuItems.length === 0) {
-      return [
-        {
-          id: "shop-static",
-          label: "Shop",
-          type: "custom",
-          url: "/shop",
-          children: [],
-        },
-        {
-          id: "new-static",
-          label: "New arrivals",
-          type: "custom",
-          url: "/categories/new-arrivals",
-          children: [],
-        },
-      ];
-    }
+const finalMenuItems = useMemo(() => {
+  const items = [...menuItems];
 
-    return [
-      ...menuItems,
+  if (modules.includes("ecommerce")) {
+    items.push(
       {
-        id: "pricing-static",
-        label: "Pricing",
+        id: "shop-static",
+        label: "Shop",
         type: "custom",
-        url: "/pricing",
+        url: "/shop",
         children: [],
       },
-    ];
-  }, [menuItems]);
+      {
+        id: "new-static",
+        label: "New arrivals",
+        type: "custom",
+        url: "/categories/new-arrivals",
+        children: [],
+      },
+    );
+  }
+
+  if (modules.includes("billing")) {
+    items.push({
+      id: "pricing-static",
+      label: "Pricing",
+      type: "custom",
+      url: "/pricing",
+      children: [],
+    });
+  }
+
+  return items;
+}, [menuItems, modules]);
 
   const logo = settings?.logo;
   const siteName = settings?.siteName || "Store";
@@ -631,8 +636,8 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
           className="flex-1 overflow-y-auto px-6 py-1"
           aria-label="Mobile navigation"
         >
-          {menuItems.length > 0 ? (
-            renderMobileMenuItems(menuItems)
+          {finalMenuItems.length > 0 ? (
+            renderMobileMenuItems(finalMenuItems)
           ) : (
             <p className="py-6 text-sm text-[#6B7280]">
               No items have been added to the selected header menu.
