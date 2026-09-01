@@ -297,6 +297,9 @@ const MODULE_FOLDERS = {
     "src/components/subscription",
     "src/hooks/use-subscription.ts",
     "src/lib/subscription",
+    "src/app/dashboard", 
+    "src/app/api/webhooks",
+    "src/app/api/subscriber-dashboard"
   ],
 };
 
