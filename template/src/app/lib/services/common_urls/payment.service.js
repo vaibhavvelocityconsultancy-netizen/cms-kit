@@ -1,4 +1,3 @@
-import paypal from "@paypal/checkout-server-sdk";
 import { getAdapter, assertPaymentProvider } from "../../payments/index.js";
 import { prisma } from "../../prisma";
 import { ApiError } from "../../utils/ApiError";
@@ -9,20 +8,6 @@ const TRIGGER_BY_TYPE = {
   PLAN: "ORDER_PLACED",
   PRODUCT: "PRODUCT_PURCHASED",
 };
-
-function paypalClient() {
-  const env =
-    process.env.PAYPAL_MODE === "live"
-      ? new paypal.core.LiveEnvironment(
-          process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID,
-          process.env.PAYPAL_CLIENT_SECRET,
-        )
-      : new paypal.core.SandboxEnvironment(
-          process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID,
-          process.env.PAYPAL_CLIENT_SECRET,
-        );
-  return new paypal.core.PayPalHttpClient(env);
-}
 
 function buildPaymentReference(paymentType, referenceId) {
   if (!paymentType || !referenceId) return {};
@@ -75,15 +60,15 @@ export async function createPayment({
   };
 }
 
-export async function updatePaymentStatus(paypalOrderId, status) {
+export async function updatePaymentStatus(providerOrderId, status) {
   return prisma.payment.updateMany({
-    where: { paypalOrderId },
+    where: { providerOrderId },
     data: { status },
   });
 }
 
-export async function getPayment(paypalOrderId) {
-  return prisma.payment.findUnique({ where: { paypalOrderId } });
+export async function getPayment(providerOrderId) {
+  return prisma.payment.findUnique({ where: { providerOrderId } });
 }
 
 export async function capturePayment(orderId, provider = "PAYPAL") {
@@ -97,16 +82,17 @@ export async function capturePayment(orderId, provider = "PAYPAL") {
       throw new ApiError(400, "Payment not completed");
     }
 
-    // ✅ Pull the real capture ID from PayPal's response
     const captureId =
-      capture.purchase_units?.[0]?.payments?.captures?.[0]?.id ?? null;
+      capture.purchase_units?.[0]?.payments?.captures?.[0]?.id ??
+      capture.paymentId ??
+      capture.id ??
+      null;
 
-    // ✅ Save using YOUR enum value
     await prisma.payment.updateMany({
-      where: { paypalOrderId: orderId },
+      where: { providerOrderId: orderId },
       data: {
-        status: "SUCCESS", // your Prisma enum value
-        paypalCaptureId: captureId,
+        status: "SUCCESS",
+        providerPaymentId: captureId,
       },
     });
 
