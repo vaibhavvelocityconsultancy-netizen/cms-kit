@@ -7,7 +7,7 @@ import { requireAuth } from "@/src/app/lib/withPermission";
 
 export const POST = asyncHandler(async (req) => {
   const { user } = await requireAuth();
-  const { planId, billingCycle = "MONTHLY" } = await req.json();
+  const { planId, billingCycle = "MONTHLY", provider = "PAYPAL" } = await req.json();
 
   if (!planId) throw new ApiError(400, "Plan ID is required");
 

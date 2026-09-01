@@ -1,4 +1,5 @@
 import paypal from "@paypal/checkout-server-sdk";
+import { getAdapter, assertPaymentProvider } from "../../payments/index.js";
 import { prisma } from "../../prisma";
 import { ApiError } from "../../utils/ApiError";
 import { sendTriggerEmails } from "../../email";
@@ -38,41 +39,27 @@ export async function createPayment({
   referenceId,
   returnUrl,
   cancelUrl,
+  provider = "PAYPAL",
 }) {
+  const normalizedProvider = assertPaymentProvider(provider);
+  const adapter = getAdapter(normalizedProvider);
   if (!userId) throw new ApiError(400, "User ID is required");
   const numericAmount = Number(amount);
   if (!numericAmount || numericAmount <= 0) {
     throw new ApiError(400, "Payment amount must be greater than zero");
   }
 
-  const client = paypalClient();
-  const request = new paypal.orders.OrdersCreateRequest();
-  request.prefer("return=representation");
-  request.requestBody({
-    intent: "CAPTURE",
-    application_context: {
-      return_url: returnUrl,
-      cancel_url: cancelUrl,
-    },
-    purchase_units: [
-      {
-        amount: {
-          currency_code: currency.toUpperCase(),
-          value: numericAmount.toFixed(2),
-        },
-        custom_id: `${userId}:${paymentType}:${referenceId ?? ""}`,
-      },
-    ],
-  });
-
-  const { result: order } = await client.execute(request);
+  const order = await adapter.createPayment({ amount: numericAmount, currency, returnUrl, cancelUrl, userId, paymentType, referenceId, receipt: `${paymentType ?? "PAYMENT"}-${referenceId ?? ""}` });
+  const orderId = order.id ?? order.orderId;
+  const approvalUrl = order.approvalUrl;
 
   await prisma.payment.create({
     data: {
       userId: Number(userId),
       ...buildPaymentReference(paymentType, referenceId),
       billingCycle,
-      paypalOrderId: order.id,
+      provider: normalizedProvider,
+      providerOrderId: orderId,
       amount: Math.round(numericAmount * 100),
       currency: currency.toUpperCase(),
       status: "PENDING",
@@ -80,9 +67,9 @@ export async function createPayment({
   });
 
   return {
-    orderId: order.id,
+    orderId,
     status: order.status,
-    approvalUrl: order.links?.find((link) => link.rel === "approve")?.href,
+    approvalUrl,
     amount: Math.round(numericAmount * 100),
     currency: currency.toUpperCase(),
   };
@@ -99,13 +86,10 @@ export async function getPayment(paypalOrderId) {
   return prisma.payment.findUnique({ where: { paypalOrderId } });
 }
 
-export async function capturePayment(orderId) {
-  const client = paypalClient();
-  const request = new paypal.orders.OrdersCaptureRequest(orderId);
-  request.requestBody({});
-
+export async function capturePayment(orderId, provider = "PAYPAL") {
+  const adapter = getAdapter(provider);
   try {
-    const { result: capture } = await client.execute(request);
+    const capture = await adapter.capturePayment(orderId);
 
     // ✅ Check PayPal's own status value here
     if (capture.status !== "COMPLETED") {

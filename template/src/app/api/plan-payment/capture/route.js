@@ -10,12 +10,12 @@ import { requireAuth } from "@/src/app/lib/withPermission";
 
 export const POST = asyncHandler(async (req) => {
   const { user } = await requireAuth();
-  const { paypalOrderId, planId, billingCycle = "MONTHLY" } = await req.json();
+  const { paypalOrderId, planId, billingCycle = "MONTHLY", provider = "PAYPAL" } = await req.json();
 
-  if (!paypalOrderId) throw new ApiError(400, "Missing PayPal order ID");
+  if (!paypalOrderId) throw new ApiError(400, "Missing payment order ID");
   if (!planId) throw new ApiError(400, "Plan ID is required");
 
-  await capturePayment(paypalOrderId);
+  await capturePayment(paypalOrderId, provider);
 
   const result =
     billingCycle === "LIFETIME"

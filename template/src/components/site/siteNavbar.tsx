@@ -9,6 +9,9 @@ import { fetchers } from "@/src/lib/fetchers";
 import { useCurrentUser } from "@/src/hooks/use-current-user";
 import { appUrl } from "@/src/lib/base-path";
 import { getBaseUrl } from "@/src/lib/config";
+import { ShoppingBag } from "lucide-react";
+import { useCart } from "@/src/lib/storefront/cart";
+import { useInstalledModules } from "@/src/lib/useInstalledModules";
 
 type SiteSettings = {
   logo?: string;
@@ -104,6 +107,10 @@ function escapeRegex(str: string): string {
 export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
   const pathname = usePathname();
   const { user } = useCurrentUser();
+  const installedModules = useInstalledModules();
+  const { lines } = useCart();
+  const cartCount = lines.reduce((total, line) => total + line.quantity, 0);
+  const ecommerceInstalled = installedModules?.some((module) => module.toLowerCase() === "ecommerce");
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
@@ -465,6 +472,13 @@ export default function SiteNavbar({ settings, headerMenu }: SiteNavbarProps) {
                 className="hidden h-5 w-px bg-[#E5E7EB] sm:block"
                 aria-hidden="true"
               />
+
+              {ecommerceInstalled ? (
+                <Link href="/cart" className="relative flex h-9 w-9 items-center justify-center rounded-full text-[#4B5563] transition-colors hover:bg-[#F3F4F6] hover:text-[#14181F]" aria-label={`Cart${cartCount ? `, ${cartCount} items` : ""}`}>
+                  <ShoppingBag aria-hidden="true" />
+                  {cartCount > 0 ? <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground">{cartCount}</span> : null}
+                </Link>
+              ) : null}
 
               <button
                 type="button"
