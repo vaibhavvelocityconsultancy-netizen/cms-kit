@@ -72,11 +72,11 @@ function stripUnknownRelations(schemaText) {
 
 function convertSchemaForSqlite(schemaText) {
   const enumNames = new Map();
-  const enumPattern = /enum\\s+(\\w+)\\s*\\{([\\s\\S]*?)\\n\\}/g;
+  const enumPattern = /enum\s+(\w+)\s*\{([\s\S]*?)\n\}/g;
 
   schemaText = schemaText.replace(enumPattern, (_, enumName, body) => {
     const members = body
-      .split("\\n")
+      .split("\n")
       .map((line) => line.trim().match(/^([A-Za-z_]\\w*)/))
       .filter(Boolean)
       .map(([, member]) => member);
@@ -85,24 +85,24 @@ function convertSchemaForSqlite(schemaText) {
   });
 
   schemaText = schemaText.replace(
-    /(^\\s*provider\\s*=\\s*)[\"']mysql[\"']/m,
+    /(^\s*provider\s*=\s*)["']mysql["']/m,
     '$1"sqlite"',
   );
-  schemaText = schemaText.replace(/\\s+@db\\.(?:Text|VarChar\\(\\s*\\d+\\s*\\)|Decimal\\(\\s*\\d+\\s*,\\s*\\d+\\s*\\))/g, "");
+  schemaText = schemaText.replace(/\s+@db\.(?:Text|VarChar\(\s*\d+\s*\)|Decimal\(\s*\d+\s*,\s*\d+\s*\))/g, "");
 
   for (const enumName of enumNames.keys()) {
     const fieldPattern = new RegExp(
-      `(\\b\\w+\\s+)${enumName}(\\[\\])?(\\?)?([^\\n]*)`,
-      "g",
+      String.raw`(^\s*\w+\s+)${enumName}(\[\])?(\?)?([^\n]*)`,
+      "gm",
     );
     schemaText = schemaText.replace(
       fieldPattern,
       (_, prefix, list, optional, attributes) => {
-        const defaultValue = attributes.match(/@default\\((\\w+)\\)/);
+        const defaultValue = attributes.match(/@default\((\w+)\)/);
         const convertedAttributes = defaultValue
           ? attributes.replace(
-              /@default\\((\\w+)\\)/,
-              (_, value) => `@default(\\"${value}\\")`,
+              /@default\((\w+)\)/,
+              (_, value) => `@default("${value}")`,
             )
           : attributes;
         return `${prefix}String${list || ""}${optional || ""}${convertedAttributes}`;
@@ -110,7 +110,7 @@ function convertSchemaForSqlite(schemaText) {
     );
   }
 
-  return schemaText.replace(/\\n{3,}/g, "\\n\\n");
+  return schemaText.replace(/\n{3,}/g, "\n\n");
 }
 
 function generateReadme(target, modules) {
