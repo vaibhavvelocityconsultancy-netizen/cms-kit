@@ -82,7 +82,7 @@ function showStatus(config, projectRoot) {
   console.log("\n╭────────────────────────────────────╮");
   console.log("│           CMSKit Status             │");
   console.log("╰────────────────────────────────────╯\n");
-
+ 
   console.log("CMSKit");
   console.log(`  Version: ${config.cmskitVersion || "1.0.0"}\n`);
 

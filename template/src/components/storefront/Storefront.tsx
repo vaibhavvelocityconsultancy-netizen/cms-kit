@@ -134,7 +134,7 @@ export function CartSummary({ lines }: { lines: CartLine[] }) {
         <span>{formatMoney(subtotal >= 150 ? subtotal : subtotal + 12)}</span>
       </div>
       <Link
-        href="/checkout"
+        href="/cart/checkout"
         className="flex h-12 items-center justify-center bg-primary text-sm text-primary-foreground hover:bg-primary/90"
       >
         Continue to checkout
